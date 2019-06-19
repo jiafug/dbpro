@@ -140,8 +140,17 @@ def main():
     1.) Modifiziertes Dataframe der line_segments (Ausgangsdaten der test_lts.csv) mit der Routennummer und classified Status
     2.) cluster: eine Liste mit Dataframes, die die Segmente (Cluster) darstellen
     '''
+    counter = 0
 
     for entry in line_segments.iterrows():
+
+        counter += 1
+
+        if (counter == 10 or counter == 25 or counter % 50 == 0):
+            time = (current_milli_time() - start_time) / 1000
+            print("Current Lines processed: {}".format(counter))
+            print("Current time running in s: {}".format(time))
+        
         entry = (entry[0], line_segments.loc[[entry[0]]].iloc[0])
         is_classified = entry[1]['classified']
         if is_classified == -1:
