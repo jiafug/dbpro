@@ -29,7 +29,7 @@ def main():
 
     start_time = current_milli_time()
 
-    with open('../test.csv') as csv_file:
+    with open('C:/Users/Schatzinator/Documents/TU Berlin/DBPRO/Dataset/test.csv') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
         latitude_list = []
         longitude_list = []
