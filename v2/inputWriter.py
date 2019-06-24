@@ -23,7 +23,7 @@ start_time = current_milli_time()
 line_segments = pd.DataFrame(columns=['lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2', 'distance', 'bearing', 'route', 'classified'])
 global result
 result = ''
-with open('C:\\Users\\Schatzinator\\Documents\\GitHub\\dbpro\\v2\\test_test_seg.csv', 'r') as csv_file:
+with open('C:\\Users\\markb\\Documents\\GitHub\\dbpro2\\v2\\test_test_seg.csv', 'r') as csv_file:
         reader = csv.reader(csv_file, delimiter=';')
         route_id = 1 
         limit = 10
