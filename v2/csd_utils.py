@@ -1,13 +1,25 @@
 import numpy as np
 import math
 
-'''
-Input: Zwei Linien als Pandas Series
-Output: Die längere Line zuerst, dann die kürzere Line als Pandas Series
-'''
-
 
 def longer_and_shorter_lines(line_a, line_b):
+    """
+    Compares which line segment has the greater distance.
+
+    Parameters
+    ----------
+    line_a : Series
+        Line segment (LTS) as a series.
+
+    line_b : Series
+        Line segment (LTS) as a series.
+
+    Returns
+    -------
+    (line_a, line_b) : tuple of (Series, Series)
+        Return a tuple where the first line segment (LTS) is the longer one.
+
+    """
     if line_a['distance'] > line_b['distance']:
         return (line_b, line_a)
     else:
@@ -15,12 +27,23 @@ def longer_and_shorter_lines(line_a, line_b):
 
 
 def projection_points(line_a, line_b):
-    '''
-    si = [13.323899, 52.512749]
-    ei = [13.332428,  52.513389]
-    sj = [13.325390,  52.513223]
-    ej = [13.328577,  52.514398]
-    '''
+    """
+    Calulate the projection points from line_b to line_a.
+
+    Parameters
+    ----------
+    line_a : Series
+        Line segment (LTS) as a series.
+
+    line_b : Series
+        Line segment (LTS) as a series.
+        
+    Returns
+    -------
+    (pe, ps, cos_angle) : tuple of (float, float, float)
+        Tuple with the projection points ps and pe and the angle theta
+
+    """
     si = line_a['si']
     ei = line_a['ei']
     sj = line_b['sj']
@@ -40,43 +63,105 @@ def projection_points(line_a, line_b):
 
     # angle θ
     sjej = np.array([ej[0] - sj[0], ej[1] - sj[1]])
-    cos_angle = np.dot(siei, sjej) / np.multiply(np.linalg.norm(siei), np.linalg.norm(sjej))
+    cos_angle = np.dot(siei, sjej) / np.multiply(np.linalg.norm(siei),
+                                                 np.linalg.norm(sjej))
 
     return (pe, ps, cos_angle)
 
 
 def distance_functions(line_a, line_b):
-    '''
-    si = [13.323899, 52.512749]
-    ei = [13.332428,  52.513389]
-    sj = [13.325390,  52.513223]
-    ej = [13.328577,  52.514398]
-    '''
+    """
+    Calculate the distance between two line segments (LTS).
+
+    Perpendicular distance (d⊥), the parallel distance (d∥), and the angle distance (dθ)
+    is used to determine the distance between two line segments (LTS).
+
+    Parameters
+    ----------
+    line_a : Series
+        Line segment (LTS) as a series.
+
+    line_b : Series
+        Line segment (LTS) as a series.
+        
+    Returns
+    -------
+    (perpendicular_distance + parallel_distance + angle_distance) : int
+        The Distance is the sum of d⊥, d∥ and dθ.
+
+    """
     si = line_a['si']
     ei = line_a['ei']
     sj = line_b['sj']
     ej = line_b['ej']
 
-    '''
-    if (si == sj and ei == ej) or (si == ei or sj == ej):
-        return 0
-    '''
-
+    # calculate the projection points first
     pe, ps, cos_angle = projection_points(line_a, line_b)
 
     def perpendicular_distance(line_a, line_b):
+        """
+        Calculate the perpendicular distance (d⊥).
+
+        Parameters
+        ----------
+        line_a : Series
+            Line segment (LTS) as a series.
+
+        line_b : Series
+            Line segment (LTS) as a series.
+            
+        Returns
+        -------
+        dist : float
+            Perpendicular distance (d⊥).
+
+        """
         l1 = np.linalg.norm(ps - sj)
         l2 = np.linalg.norm(pe - ej)
         dist = (l1 * l1 + l2 * l2) / l1 + l2
         return dist
 
     def parallel_distance(line_a, line_b):
+        """
+        Calculate the parallel distance d∥.
+
+        Parameters
+        ----------
+        line_a : Series
+            Line segment (LTS) as a series.
+
+        line_b : Series
+            Line segment (LTS) as a series.
+            
+        Returns
+        -------
+        dist : float
+            Parallel distance d∥.
+
+        """
         l1 = min(np.linalg.norm(si - ps), np.linalg.norm(ei - ps))
         l2 = min(np.linalg.norm(si - pe), np.linalg.norm(ei - pe))
         dist = min(l1, l2)
         return dist
 
     def angle_distance(line_a, line_b):
+        """
+        Calculate the angle distance (dθ).
+
+        Parameters
+        ----------
+        line_a : Series
+            Line segment (LTS) as a series.
+
+        line_b : Series
+            Line segment (LTS) as a series.
+
+        Returns
+        -------
+        dist : float 
+            Angle distance (dθ).
+
+        """
         nonlocal cos_angle
         if (cos_angle) > 1:
             cos_angle = 1
@@ -85,7 +170,6 @@ def distance_functions(line_a, line_b):
         angle = math.acos(cos_angle)
         sjej = np.array([ej[0] - sj[0], ej[1] - sj[1]])
         dist = 0
-        # print("angle: {}".format(np.degrees(angle)))
         if np.degrees(angle) >= 0 and np.degrees(angle) < 90:
             dist = np.linalg.norm(sjej) * math.sin(angle)
         elif np.degrees(angle) >= 90 and np.degrees(angle) <= 180:
@@ -95,14 +179,5 @@ def distance_functions(line_a, line_b):
     perpendicular_distance = perpendicular_distance(line_a, line_b)
     parallel_distance = parallel_distance(line_a, line_b)
     angle_distance = angle_distance(line_a, line_b)
-
-    # print("perpendicular_distance: {}".format(perpendicular_distance))
-    # print("parallel_distance: {}".format(parallel_distance))
-    # print("angle_distance: {}".format(angle_distance))
-
-    '''
-    Per Diffinition ist die Distanz die Addierte Distanzen der verschiedenen Funktionen,
-    eine Gewichting kann noch erfolgen falls notwendig
-    '''
 
     return (perpendicular_distance + parallel_distance + angle_distance)
