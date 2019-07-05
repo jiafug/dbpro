@@ -7,10 +7,12 @@ import time as ttt
 import csd_utils
 import numpy as np
 from rtree import index
+from sklearn.linear_model import LinearRegression
+import gps_utils as gps
 
 # input variables
 DATA_PATH = "test_lts.csv"
-MIN_LENGTH = 25
+MIN_LENGTH = 50
 EPSILON = 0.0005
 MIN_LNS = 3
 
@@ -41,6 +43,9 @@ def main():
 
     # find all clusters
     ls_clusters = line_segment_clustering(line_segments, rtree)
+
+    # ...
+    more_segments(ls_clusters, line_segments)
 
     # logging statistics
     time = (current_milli_time() - start_time) / 1000
@@ -391,6 +396,269 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
         queue = queue.iloc[1:]
 
     return cluster
+
+
+def more_segments(clusters, line_segments):
+    for entry in clusters:
+        new_lg = consecutive_lines_connecting(entry)
+        a, b, c = represent_line(new_lg)
+        projection_lg, projection_points_list = line_projection(
+            a, b, c, new_lg)
+        final_projection_points, test_list = projection_points(
+            projection_points_list)
+        test_lg = form_sts(final_projection_points, test_list)
+        new_lg = test(projection_lg, test_lg, new_lg)
+        line_segments['classified'] = line_segments['classified'].apply(
+            lambda x: str(x))
+        update(new_lg, line_segments)
+
+
+def consecutive_lines_connecting(entry):
+
+    new_lg = pd.DataFrame(columns=[
+        'lon1', 'lat1', 'lon2', 'lat2', 'distance', 'route', 'segments',
+        'classified'
+    ])
+
+    # list of all routes in a segment cluster (LTS)
+    distinct_routes = entry.route.unique().tolist()
+
+    for i in distinct_routes:
+        route = entry.loc[entry['route'] == i]
+        route = route.sort_values(by=['tstart1'])
+        first_line = route.iloc[0]
+        last_line = route.iloc[-1]
+        dis = gps.haversine((first_line[0], first_line[1]),
+                            (last_line[4], last_line[5]))
+
+        line_ids = route.index.values
+        # line_ids = np.array2string(line_ids)
+        df = pd.DataFrame(
+            {
+                'lon1': first_line[0],
+                'lat1': first_line[1],
+                'lon2': last_line[4],
+                'lat2': last_line[5],
+                'distance': dis,
+                'route': i,
+                'segments': [line_ids],
+                'classified': first_line['classified']
+            },
+            index=[0])
+        new_lg = new_lg.append(df)
+
+    return new_lg
+
+
+def represent_line(new_lg):
+
+    lon1_list = new_lg['lon1'].values.tolist()
+    lon2_list = new_lg['lon2'].values.tolist()
+    lon1_list.extend(lon2_list)
+    x_list = np.array(lon1_list).reshape(-1, 1)
+    lat1_list = new_lg['lat1'].values.tolist()
+    lat2_list = new_lg['lat2'].values.tolist()
+    lat1_list.extend(lat2_list)
+    y_list = np.array(lat1_list).reshape(-1, 1)
+
+    linear_regressor = LinearRegression()  # create object for the class
+    linear_regressor.fit(x_list, y_list)  # perform linear regression
+    Y_pred = linear_regressor.predict(x_list)  # make predictions
+
+    a = linear_regressor.coef_[0][0]
+    b = -1
+    c = linear_regressor.intercept_[0]
+
+    return a, b, c
+
+
+def line_projection(a, b, c, new_lg):
+    lon_l = []
+    lat_l = []
+    projection_lg = pd.DataFrame(
+        columns=['lon1', 'lat1', 'lon2', 'lat2', 'route', 'segments'])
+    for i in new_lg.iterrows():
+        p1_lon = i[1][0]
+        p1_lat = i[1][1]
+        x1 = (b * b * p1_lon - a * b * p1_lat - a * c) / (a * a + b * b)
+        y1 = (a * a * p1_lat - a * b * p1_lon - b * c) / (a * a + b * b)
+        p2_lon = i[1][2]
+        p2_lat = i[1][3]
+        x2 = (b * b * p2_lon - a * b * p2_lat - a * c) / (a * a + b * b)
+        y2 = (a * a * p2_lat - a * b * p2_lon - b * c) / (a * a + b * b)
+        save_x1 = x1
+        save_y1 = y1
+        if x1 > x2:
+            x1 = x2
+            y1 = y2
+            x2 = save_x1
+            y2 = save_y1
+        df = pd.DataFrame(
+            {
+                'lon1': x1,
+                'lat1': y1,
+                'lon2': x2,
+                'lat2': y2,
+                'route': i[1][5],
+                'segments': [i[1][6]]
+            },
+            index=[0])
+        lon_l.append(x1)
+        lat_l.append(y1)
+        lon_l.append(x2)
+        lat_l.append(y2)
+        projection_lg = projection_lg.append(df)
+
+    x_lon = np.asarray(lon_l).reshape(-1, 1)
+    y_lat = np.asarray(lat_l).reshape(-1, 1)
+
+    projection_points = np.concatenate((x_lon, y_lat), axis=1).tolist()
+
+    projection_points.sort()
+    projection_lg = projection_lg.sort_values(by=['lon1'])
+
+    return projection_lg, projection_points
+
+
+def projection_points(projection_points_list):
+
+    # die projektionspunkte
+    final_projection_points = []
+    # list mit min, max lon wert eines Punktes (speziell cluster mit centroid)
+    test_list = []
+    p_point = None
+    merged = False
+    first = True
+    last_point = None
+    for point in projection_points_list:
+        x = round(point[0], 6)
+        if p_point is not None:
+            distance = gps.haversine(point, p_point)
+            if distance >= 50:
+                if merged == False:
+                    # auch punkte ohne in einem cluster , bekommen min und max lon der vollständigkeits halber
+                    final_projection_points.append(p_point)
+                    test_list += 2 * [p_point[0]]
+                if merged:
+                    test_list.append(p_point_max)
+                    first = True
+                last_point = point
+                merged = False
+            else:
+                # print(point)
+                lon = [p_point[0], point[0]]
+                lat = [p_point[1], point[1]]
+                point = middle_p = list(gps.centroid(lon, lat))
+                p_point_max = lon[1]
+                if first:
+                    test_list.append(lon[0])
+                    first = False
+                if merged:
+                    del final_projection_points[-1]
+                final_projection_points.append(middle_p)
+                merged = True
+        p_point = point
+    # um es abzuschließen
+    if merged:
+        test_list.append(p_point_max)
+    else:
+        test_list += 2 * [last_point[0]]
+        final_projection_points.append(last_point)
+
+    return final_projection_points, test_list
+
+
+def form_sts(final_projection_points, test_list):
+    test_lg = pd.DataFrame(columns=[
+        'lon1', 'lat1', 'lon2', 'lat2', 'min_x1', 'max_x1', 'min_x2', 'max_x2'
+    ])
+
+    lon1 = None
+    counter = 0
+    l_id = 0
+    for i in final_projection_points:
+        lon2 = i[0]
+        lat2 = i[1]
+        print(i)
+        if (lon1 is not None):
+            df = pd.DataFrame(
+                {
+                    'lon1': lon1,
+                    'lat1': lat1,
+                    'lon2': lon2,
+                    'lat2': lat2,
+                    'min_x1': test_list[counter],
+                    'max_x1': test_list[counter + 1],
+                    'min_x2': test_list[counter + 2],
+                    'max_x2': test_list[counter + 3]
+                },
+                index=[l_id])
+            test_lg = test_lg.append(df)
+            lon1 = None
+            counter += 2
+            l_id += 1
+        lon1 = lon2
+        lat1 = lat2
+
+    # representiv line segments
+    return test_lg
+
+
+def test(projection_lg, test_lg, new_lg):
+    id_list = []
+    p_test_lg = pd.DataFrame(columns=[
+        'lon1', 'lat1', 'lon2', 'lat2', 'min_x1', 'max_x1', 'min_x2', 'max_x2'
+    ])
+    loop_break = False
+    for entry in projection_lg.iterrows():
+        e_lon1 = entry[1][0]
+        e_lat1 = entry[1][1]
+        e_lon2 = entry[1][2]
+        e_lat2 = entry[1][3]
+        # linenvergleich beginnt
+        for line in test_lg.iterrows():
+            # jede line in test_lg eigenschaften
+            min_x1 = line[1][4]
+            max_x1 = line[1][5]
+            min_x2 = line[1][6]
+            max_x2 = line[1][7]
+            if e_lon1 >= min_x1 and e_lon1 < max_x2 and e_lon2 <= max_x2:
+                id_list.append([line[0]])
+                break
+            elif p_test_lg.shape[0]:
+                for test in p_test_lg.iterrows():
+                    if e_lon1 >= test[1][
+                            'min_x1'] and e_lon1 < max_x2 and e_lon2 <= max_x2 and e_lon1 < test[
+                                1]['max_x2']:
+                        id_list.append([test[0], line[0]])
+                        loop_break = True
+                        break
+                if loop_break:
+                    loop_break = False
+                    break
+            p_test_lg = p_test_lg.append(line[1])
+        p_test_lg = p_test_lg.iloc[0:0]
+
+    new_lg['sub_segment'] = id_list
+    return new_lg
+
+
+def update(new_lg, line_segments):
+    # update the classified id with the new sub segments
+    for lg in new_lg.iterrows():
+        segments = lg[1]['segments']
+        sub_segment = lg[1]['sub_segment']
+        cluster = lg[1]['classified']
+        new_cluster = cluster * 10000
+        for ls in list(segments):
+            cluster_seg = []
+            i = sub_segment[0]
+            while i <= sub_segment[-1]:
+                new_id = new_cluster + i
+                cluster_seg.append(new_id)
+                i += 1
+
+            line_segments.at[ls, 'classified'] = str(cluster_seg)
 
 
 def write_to_csv(line_segments):
