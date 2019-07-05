@@ -62,9 +62,10 @@ def main():
             cleared = row[8].replace("],[",
                                      " -1 ").replace("[[",
                                                      "").replace("]]", "")
-
+            missing_data = row[7]
+            
             # ignore header
-            if cleared != "POLYLINE":
+            if cleared != "POLYLINE" and missing_data == "False" and row[8] != "[]":
                 trajectory_count += 1
                 splitted = cleared.split(" -1 ")
 
