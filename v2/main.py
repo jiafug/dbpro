@@ -8,6 +8,7 @@ import gps_utils as gps
 import tdbc
 import time as ttt
 from rdp import rdp
+import csd
 
 # input variables
 DATA_PATH = "../test.csv"
@@ -130,6 +131,8 @@ def main():
 
     # logging
     statistics()
+
+    csd.main()
 
 
 def data_simplification(route):
