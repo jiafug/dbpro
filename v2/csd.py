@@ -12,9 +12,10 @@ import gps_utils as gps
 
 # input variables
 DATA_PATH = "test_lts.csv"
-MIN_LENGTH = 50
+MIN_LENGTH = 75
 EPSILON = 0.0005
 MIN_LNS = 3
+FILLER = 10000
 
 # logging
 logger = logging.getLogger()
@@ -83,6 +84,12 @@ def csd_import():
         csv_reader = csv.reader(csv_file, delimiter=';')
         route_id = 0
         for row in csv_reader:
+            '''
+            # test break
+            if route_id == 20:
+                break
+            '''
+
             if row[0] == '':
                 pass
             else:
@@ -411,6 +418,8 @@ def more_segments(clusters, line_segments):
         line_segments['classified'] = line_segments['classified'].apply(
             lambda x: str(x))
         update(new_lg, line_segments)
+        seg_id = new_lg.iloc[0]['classified']
+        write_representative_trajectory(test_lg, seg_id)
 
 
 def consecutive_lines_connecting(entry):
@@ -545,7 +554,6 @@ def projection_points(projection_points_list):
                 last_point = point
                 merged = False
             else:
-                # print(point)
                 lon = [p_point[0], point[0]]
                 lat = [p_point[1], point[1]]
                 point = middle_p = list(gps.centroid(lon, lat))
@@ -579,7 +587,6 @@ def form_sts(final_projection_points, test_list):
     for i in final_projection_points:
         lon2 = i[0]
         lat2 = i[1]
-        print(i)
         if (lon1 is not None):
             df = pd.DataFrame(
                 {
@@ -649,7 +656,7 @@ def update(new_lg, line_segments):
         segments = lg[1]['segments']
         sub_segment = lg[1]['sub_segment']
         cluster = lg[1]['classified']
-        new_cluster = cluster * 10000
+        new_cluster = cluster * FILLER
         for ls in list(segments):
             cluster_seg = []
             i = sub_segment[0]
@@ -679,6 +686,14 @@ def write_to_csv(line_segments):
 
     # logging
     logger.info("wrote results to 'test_seg.csv'")
+
+
+def write_representative_trajectory(test_lg, seg_id):
+    test_lg.index = range(seg_id * FILLER, seg_id * FILLER + len(test_lg))
+    test_lg.to_csv('representative_trajectories.csv',
+                   header=False,
+                   sep=';',
+                   mode='a')  # header = 'False', index = 'True')
 
 
 if __name__ == "__main__":
