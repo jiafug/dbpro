@@ -23,28 +23,33 @@ start_time = current_milli_time()
 line_segments = pd.DataFrame(columns=['lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2', 'distance', 'bearing', 'route', 'classified'])
 global result
 result = ''
-with open('C:\\Users\\markb\\Documents\\GitHub\\dbpro2\\v2\\test_test_seg.csv', 'r') as csv_file:
+with open('C:\\Users\\markb\\Documents\\GitHub\\dbpro2\\v2\\test_seg.csv', 'r') as csv_file:
         reader = csv.reader(csv_file, delimiter=';')
         route_id = 1 
-        limit = 10
-        i = 0
-        for row in reader:
-            i += 1
-            while (i < limit):
-                print('for row')
-                if row[11] == route_id:
-                    print('if')
-                    print(row[11])
-                    cluster = str(row[11])
-                    result =  result + cluster + ' -1 '
-                    print('if:' + cluster + 'String: ' + result)
-                    break
-                else:
-                    print('else')
+        #limit = 10  for debugging only
+        for row in reader:   
+            # skip header
+            if row[1] == 'lon1':
+                print('header passed')
+                pass
+            else:
+                #print('for row')
+                #print(row)
+                if int(row[11]) != route_id:
+                    result +=  '-2\n'
                     route_id += 1
-                    cluster = str(row[11])
-                    result +=  '-2\n' + cluster + ' -1 '
-                    print('else:' + cluster + 'String: ' + result)
+                #print(row[11])
+                #print(row[12])
+                cluster = list(row[12])
+                for i in cluster:
+                    print(i)
+                    try:
+                        i = int(i)
+                    except:
+                        print('no number')
+                    else:
+                        if isinstance(i, int):
+                            result =  result + str(i) + ' -1 '
                     
                 #df = {'lon1': float(row[1]), 'lat1': float(row[2]), 'tstart1': float(row[3]), 'tend1': row[4], 'lon2': float(row[5]), 'lat2': float(row[6]), 'tstart2': float(row[7]), 'tend2': row[8], 'distance': row[9], 'bearing': row[10], 'route': row[11], 'classified': row[12]}
                 #print(str(df))
