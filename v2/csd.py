@@ -81,7 +81,6 @@ def csd_import(final_lts):
     logger.info("lts.csv import started...")
     start_time = current_milli_time()
 
-    
     for row in final_lts.iterrows():
         '''
         # test break
@@ -218,8 +217,8 @@ def line_segment_clustering(line_segments, rtree):
                 neighborhood(line_segments, entry, False, rtree))
             neighbor_count = neighbors.shape[0]
 
-            # debugging 
-            print("neighbors: {}".format(neighbor_count))
+            # debugging
+            print("neighbors: {n} / {c}".format(n=neighbor_count, c=counter))
 
             if neighbor_count >= MIN_LNS:
                 # Assign clusterId to ∀X ∈ Nε(L)
@@ -695,6 +694,7 @@ def write_representative_trajectory(test_lg, seg_id):
     print("seg_id: {}".format(seg_id))
     print("FILLER: {}".format(FILLER))
     print("len(test_lg): {}".format(len(test_lg)))
+    seg_id = int(seg_id)
     test_lg.index = range(seg_id * FILLER, seg_id * FILLER + len(test_lg))
     test_lg.to_csv('representative_trajectories.csv',
                    header=False,
