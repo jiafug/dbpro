@@ -35,7 +35,7 @@ with open('C:\\Users\\markb\\Documents\\GitHub\\dbpro2\\v2\\test_seg.csv', 'r') 
             else:
                 #print('for row')
                 #print(row)
-                if int(row[11]) != route_id:
+                if int(float(row[11])) != route_id:
                     result +=  '-2\n'
                     route_id += 1
                 #print(row[11])
@@ -73,7 +73,9 @@ for entry in line_segments.iterrows():
         #print('else:' + cluster + 'String: ' + inputSP)
         
 '''      
-#print(result)        
+#print(result)       
+
+result +=  '-2\n' 
 f = open("inputprefixspan.txt", "w")
 f.write(result)
 f.close()

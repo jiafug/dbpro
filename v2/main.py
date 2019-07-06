@@ -12,7 +12,7 @@ import csd
 import gc
 
 # input variables
-DATA_PATH = "../test.csv"
+DATA_PATH = "C:\\Users\\markb\\Documents\\DBPRO\\raw_data\\test.csv"
 TIME_THRESHOLD = 500
 DISTANCE_THRESHOLD = 60
 EPSILON = 0.00025
