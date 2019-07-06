@@ -162,3 +162,4 @@ test_lts.csv
 test_seg.csv
 v2/inputprefixspan.txt
 v2/test_seg.csv
+v2/clusterAvg.csv
