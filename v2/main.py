@@ -9,6 +9,7 @@ import tdbc
 import time as ttt
 from rdp import rdp
 import csd
+import gc
 
 # input variables
 DATA_PATH = "../test.csv"
@@ -18,7 +19,7 @@ EPSILON = 0.00025
 
 # logging
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%H:%M:%S')
@@ -45,6 +46,7 @@ def main():
 
     # logging
     start_time = current_milli_time()
+    
 
     with open(DATA_PATH) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
@@ -52,6 +54,11 @@ def main():
         longitude_list = []
         time_list = []
         time = 0
+
+        final_lts = pd.DataFrame(columns=[
+                    'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
+                    'distance', 'bearing'
+                ])
 
         # logging
         past_time = current_milli_time()
@@ -64,9 +71,14 @@ def main():
                                      " -1 ").replace("[[",
                                                      "").replace("]]", "")
             missing_data = row[7]
-            
+
+            # test break
+            if trajectory_count == 10:
+                break
+
             # ignore header
-            if cleared != "POLYLINE" and missing_data == "False" and row[8] != "[]":
+            if cleared != "POLYLINE" and missing_data == "False" and row[
+                    8] != "[]":
                 trajectory_count += 1
                 splitted = cleared.split(" -1 ")
 
@@ -119,7 +131,7 @@ def main():
                 stop_count += route.shape[0]
 
                 # write line segments (LTS) to a new csv file
-                write_to_csv(merged)
+                final_lts = write_to_df(merged, final_lts)
 
                 # reset list for next trajectory
                 latitude_list = []
@@ -132,7 +144,11 @@ def main():
     # logging
     statistics()
 
-    csd.main()
+    # garbage collection
+    gc.collect()
+
+    #csd
+    csd.csd_main(final_lts)
 
 
 def data_simplification(route):
@@ -181,7 +197,7 @@ def data_simplification(route):
     return merged
 
 
-def write_to_csv(merged):
+def write_to_df(merged, final_lts):
     """
     Write LTS to a new csv file.
 
@@ -225,7 +241,7 @@ def write_to_csv(merged):
         p_point_e = True
 
     lts = lts.reset_index(drop=True)
-    # print(lts)
+    '''
     if not header:
         header = True
         lts.to_csv('test_lts.csv', header=True, sep=';',
@@ -233,6 +249,10 @@ def write_to_csv(merged):
     else:
         lts.to_csv('test_lts.csv', header=False, sep=';',
                    mode='a')  # header = 'False', index = 'True')
+    '''
+    final_lts = final_lts.append(lts)
+    return final_lts
+
 
 
 def statistics():

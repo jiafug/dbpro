@@ -9,6 +9,7 @@ import numpy as np
 from rtree import index
 from sklearn.linear_model import LinearRegression
 import gps_utils as gps
+import gc
 
 # input variables
 DATA_PATH = "test_lts.csv"
@@ -28,7 +29,7 @@ logger.addHandler(ch)
 current_milli_time = lambda: int(round(ttt.time() * 1000))
 
 
-def main():
+def csd_main(final_lts):
     # numpy settings
     np.seterr(invalid='ignore', divide='ignore')
 
@@ -37,7 +38,7 @@ def main():
     start_time = current_milli_time()
 
     # import line segments
-    line_segments = csd_import()
+    line_segments = csd_import(final_lts)
 
     # initialize a r-tree as a index
     rtree = r_tree(line_segments)
@@ -64,7 +65,7 @@ def main():
     write_to_csv(line_segments)
 
 
-def csd_import():
+def csd_import(final_lts):
     """
     Import LTS and saves them in a DataFrame.
 
@@ -80,39 +81,37 @@ def csd_import():
     logger.info("lts.csv import started...")
     start_time = current_milli_time()
 
-    with open(DATA_PATH) as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=';')
+    
+    for row in final_lts.iterrows():
+        '''
+        # test break
+        if route_id == 20:
+            break
+        '''
         route_id = 0
-        for row in csv_reader:
-            '''
-            # test break
-            if route_id == 20:
-                break
-            '''
-
-            if row[0] == '':
-                pass
-            else:
-                if float(row[0]) == 0:
-                    route_id += 1
-                # short line segment filter
-                if float(row[9]) >= MIN_LENGTH:
-                    df = {
-                        'lon1': float(row[1]),
-                        'lat1': float(row[2]),
-                        'tstart1': float(row[3]),
-                        'tend1': row[4],
-                        'lon2': float(row[5]),
-                        'lat2': float(row[6]),
-                        'tstart2': float(row[7]),
-                        'tend2': row[8],
-                        'distance': row[9],
-                        'bearing': row[10],
-                        'route': route_id
-                    }
-                    line_segments = line_segments.append(df, ignore_index=True)
+        if row[0] == 0:
+            route_id += 1
+        # short line segment filter
+        if row[1]['distance'] >= MIN_LENGTH:
+            df = {
+                'lon1': row[1]['lon1'],
+                'lat1': row[1]['lat1'],
+                'tstart1': row[1]['tstart1'],
+                'tend1': row[1]['tend1'],
+                'lon2': row[1]['lon2'],
+                'lat2': row[1]['lat2'],
+                'tstart2': row[1]['tstart2'],
+                'tend2': row[1]['tend2'],
+                'distance': row[1]['distance'],
+                'bearing': row[1]['bearing'],
+                'route': route_id
+            }
+            line_segments = line_segments.append(df, ignore_index=True)
     time = (current_milli_time() - start_time) / 1000
     logger.info("lts.csv was imported in {} s".format(time))
+
+    # garbage collection
+    gc.collect()
 
     return line_segments
 
@@ -203,7 +202,7 @@ def line_segment_clustering(line_segments, rtree):
     for entry in line_segments.iterrows():
 
         # logging
-        if counter != 0 and counter % 500 == 0:
+        if counter != 0 and counter == 1 and counter == 5 and counter == 20 and counter == 100 and counter % 500 == 0:
             time = (current_milli_time() - past_time) / 1000
             logger.info(
                 "current line segments processed: {c} \n processed last 500 lines in {t} s"
