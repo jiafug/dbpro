@@ -591,6 +591,7 @@ def projection_points(projection_points_list, a, b, c):
             results.append([x, y])
             new_list += 2 * [x]
         final_projection_points = results
+        test_list = new_list
         
 
     return final_projection_points, test_list
@@ -601,20 +602,7 @@ def form_sts(final_projection_points, test_list):
         'lon1', 'lat1', 'lon2', 'lat2', 'min_x1', 'max_x1', 'min_x2', 'max_x2'
     ])
 
-    # debug     
-    if len(final_projection_points == 2):
-        df = pd.DataFrame(
-                {
-                    'lon1': final_projection_points[0][0],
-                    'lat1': final_projection_points[0][1],
-                    'lon2': final_projection_points[1][0],
-                    'lat2': final_projection_points[1][1],
-                    'min_x1': test_list[0],
-                    'max_x1': test_list[1],
-                    'min_x2': test_list[2],
-                    'max_x2': test_list[3]
-                },
-                index=[0])
+
 
 
     lon1 = None
