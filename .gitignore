@@ -153,3 +153,8 @@ $RECYCLE.BIN/
 v2/__pycache__/gps_utils.cpython-37.pyc
 v2/__pycache__/tdbc.cpython-37.pyc
 v2/__pycache__/csd_utils.cpython-37.pyc
+v2/test_lts.csv
+v2/test_seg.csv
+v2/test_test_seg.csv
+v2/inputprefixspan.txt
+v2/representative_trajectories.csv
