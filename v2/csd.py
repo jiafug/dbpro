@@ -12,10 +12,9 @@ import gps_utils as gps
 import gc
 
 # input variables
-DATA_PATH = "test_lts.csv"
 MIN_LENGTH = 75
 EPSILON = 0.0005
-MIN_LNS = 1
+MIN_LNS = 2
 FILLER = 10000
 
 # logging
@@ -38,7 +37,11 @@ def csd_main(final_lts):
     start_time = current_milli_time()
 
     # import line segments
-    line_segments = csd_import(final_lts)
+    line_segments = final_lts[['lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2',
+            'tend2', 'distance', 'bearing', 'route']]
+
+    line_segments = line_segments.reset_index(drop=True)
+    print(line_segments)
 
     # initialize a r-tree as a index
     rtree = r_tree(line_segments)
@@ -59,7 +62,7 @@ def csd_main(final_lts):
         t=time,
         ls=len(line_segments.index),
         c=len(ls_clusters),
-        n=(line_segments.classified == "0").sum()))
+        n=(line_segments.classified == "0.0").sum()))
 
     # write LTS results to new csv
     write_to_csv(line_segments)
@@ -291,6 +294,7 @@ def neighborhood(line_segments, line, extended, rtree):
     max_x = max(lon1, lon2)
     min_y = min(lat1, lat2)
     max_y = max(lat1, lat2)
+    print("rtree.intersection calculation...")
     n_candidates_ids = list(rtree.intersection((min_x, min_y, max_x, max_y)))
     n_candidates = line_segments.iloc[n_candidates_ids, :]
 
@@ -377,7 +381,7 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
                         'tend2': xn[1][7],
                         'distance': xn[1][8],
                         'bearing': xn[1][9],
-                        'route': xn[1][10],
+                        'route': int(xn[1][10]),
                         'classified': cluster_id
                     })
                     series.name = xn[0]
@@ -396,7 +400,7 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
                         'tend2': xn[1][7],
                         'distance': xn[1][8],
                         'bearing': xn[1][9],
-                        'route': xn[1][10],
+                        'route': int(xn[1][10]),
                         'classified': cluster_id
                     })
                     series.name = xn[0]
@@ -414,7 +418,7 @@ def more_segments(clusters, line_segments):
         projection_lg, projection_points_list = line_projection(
             a, b, c, new_lg)
         final_projection_points, test_list = projection_points(
-            projection_points_list)
+            projection_points_list, a, b, c)
         test_lg = form_sts(final_projection_points, test_list)
         new_lg = test(projection_lg, test_lg, new_lg)
         line_segments['classified'] = line_segments['classified'].apply(
@@ -530,8 +534,11 @@ def line_projection(a, b, c, new_lg):
 
     return projection_lg, projection_points
 
+def regression_line(a, b, c, x):
+    y = c + a * x
+    return y
 
-def projection_points(projection_points_list):
+def projection_points(projection_points_list, a, b, c):
 
     # die projektionspunkte
     final_projection_points = []
@@ -574,6 +581,17 @@ def projection_points(projection_points_list):
     else:
         test_list += 2 * [last_point[0]]
         final_projection_points.append(last_point)
+    
+    # debug
+    if len(final_projection_points) == 1:
+        results = []
+        new_list = []
+        for x in test_list:
+            y = regression_line(a, b, c, x)
+            results.append([x, y])
+            new_list += 2 * [x]
+        final_projection_points = results
+        
 
     return final_projection_points, test_list
 
@@ -582,6 +600,22 @@ def form_sts(final_projection_points, test_list):
     test_lg = pd.DataFrame(columns=[
         'lon1', 'lat1', 'lon2', 'lat2', 'min_x1', 'max_x1', 'min_x2', 'max_x2'
     ])
+
+    # debug     
+    if len(final_projection_points == 2):
+        df = pd.DataFrame(
+                {
+                    'lon1': final_projection_points[0][0],
+                    'lat1': final_projection_points[0][1],
+                    'lon2': final_projection_points[1][0],
+                    'lat2': final_projection_points[1][1],
+                    'min_x1': test_list[0],
+                    'max_x1': test_list[1],
+                    'min_x2': test_list[2],
+                    'max_x2': test_list[3]
+                },
+                index=[0])
+
 
     lon1 = None
     counter = 0
@@ -620,24 +654,30 @@ def test(projection_lg, test_lg, new_lg):
     ])
     loop_break = False
     for entry in projection_lg.iterrows():
-        e_lon1 = entry[1][0]
-        e_lat1 = entry[1][1]
-        e_lon2 = entry[1][2]
-        e_lat2 = entry[1][3]
+        e_lon1 = round(entry[1][0], 6)
+        e_lat1 = round(entry[1][1], 6)
+        e_lon2 = round(entry[1][2], 6)
+        e_lat2 = round(entry[1][3], 6)
         # linenvergleich beginnt
         for line in test_lg.iterrows():
             # jede line in test_lg eigenschaften
-            min_x1 = line[1][4]
-            max_x1 = line[1][5]
-            min_x2 = line[1][6]
-            max_x2 = line[1][7]
+            min_x1 = round(line[1][4], 6) 
+            max_x1 = round(line[1][5], 6) 
+            min_x2 = round(line[1][6], 6) 
+            max_x2 = round(line[1][7], 6) 
+            print("e_lon1 >= min_x1 and e_lon1 < max_x2 and e_lon2 <= max_x2")
+            print(e_lon1, min_x1, e_lon1, max_x2, e_lon2, max_x2)
+            print(e_lon1 >= min_x1 and e_lon1 < max_x2 and e_lon2 <= max_x2)
             if e_lon1 >= min_x1 and e_lon1 < max_x2 and e_lon2 <= max_x2:
                 id_list.append([line[0]])
                 break
             elif p_test_lg.shape[0]:
                 for test in p_test_lg.iterrows():
-                    if e_lon1 >= test[1][
-                            'min_x1'] and e_lon1 < max_x2 and e_lon2 <= max_x2 and e_lon1 < test[
+                    print("e_lon1 >= test[1]['min_x1'] and e_lon1 < max_x2 and e_lon2 <= max_x2 and e_lon1 < test[1]['max_x2']")
+                    print(e_lon1, test[1]['min_x1'], e_lon1, max_x2, e_lon2, max_x2, e_lon1, test[1]['max_x2'])
+                    print(e_lon1 >= test[1]['min_x1'],  e_lon1 < max_x2,  e_lon2 <= max_x2, e_lon1 < test[1]['max_x2'])
+                    if e_lon1 >= round(test[1][
+                            'min_x1'], 6) and e_lon1 < max_x2 and e_lon2 <= max_x2 and e_lon1 < test[
                                 1]['max_x2']:
                         id_list.append([test[0], line[0]])
                         loop_break = True
@@ -647,6 +687,12 @@ def test(projection_lg, test_lg, new_lg):
                     break
             p_test_lg = p_test_lg.append(line[1])
         p_test_lg = p_test_lg.iloc[0:0]
+
+    if len(id_list) != new_lg.shape[0]:
+        print(projection_lg)
+        print(test_lg)
+        print(id_list)
+        print(new_lg)
 
     new_lg['sub_segment'] = id_list
     return new_lg
@@ -666,7 +712,7 @@ def update(new_lg, line_segments):
                 new_id = new_cluster + i
                 cluster_seg.append(new_id)
                 i += 1
-
+            
             line_segments.at[ls, 'classified'] = str(cluster_seg)
 
 
@@ -691,9 +737,6 @@ def write_to_csv(line_segments):
 
 
 def write_representative_trajectory(test_lg, seg_id):
-    print("seg_id: {}".format(seg_id))
-    print("FILLER: {}".format(FILLER))
-    print("len(test_lg): {}".format(len(test_lg)))
     seg_id = int(seg_id)
     test_lg.index = range(seg_id * FILLER, seg_id * FILLER + len(test_lg))
     test_lg.to_csv('representative_trajectories.csv',
