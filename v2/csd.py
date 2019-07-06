@@ -217,6 +217,10 @@ def line_segment_clustering(line_segments, rtree):
             neighbors = neighbors.append(
                 neighborhood(line_segments, entry, False, rtree))
             neighbor_count = neighbors.shape[0]
+
+            # debugging 
+            print("neighbors: {}".format(neighbor_count))
+
             if neighbor_count >= MIN_LNS:
                 # Assign clusterId to ∀X ∈ Nε(L)
                 neighbors['classified'] = cluster_id
