@@ -59,6 +59,7 @@ def main():
                     'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
                     'distance', 'bearing'
                 ])
+        
 
         # logging
         past_time = current_milli_time()
@@ -73,8 +74,8 @@ def main():
             missing_data = row[7]
 
             # test break
-            if trajectory_count == 10:
-                break
+            #if trajectory_count == 10:
+            #    break
 
             # ignore header
             if cleared != "POLYLINE" and missing_data == "False" and row[

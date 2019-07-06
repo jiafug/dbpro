@@ -44,7 +44,7 @@ with open('C:\\Users\\markb\\Documents\\GitHub\\dbpro2\\v2\\test_seg.csv', 'r') 
                 for i in cluster:
                     print(i)
                     try:
-                        i = int(i)
+                        i = int(float(i))
                     except:
                         print('no number')
                     else:

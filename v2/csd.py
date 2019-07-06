@@ -15,7 +15,7 @@ import gc
 DATA_PATH = "test_lts.csv"
 MIN_LENGTH = 75
 EPSILON = 0.0005
-MIN_LNS = 3
+MIN_LNS = 1
 FILLER = 10000
 
 # logging
