@@ -202,7 +202,7 @@ def line_segment_clustering(line_segments, rtree):
     for entry in line_segments.iterrows():
 
         # logging
-        if counter != 0 and counter == 1 and counter == 5 and counter == 20 and counter == 100 and counter % 500 == 0:
+        if counter != 0 and counter == 1 or counter == 5 or counter == 20 or counter == 100 or counter % 500 == 0:
             time = (current_milli_time() - past_time) / 1000
             logger.info(
                 "current line segments processed: {c} \n processed last 500 lines in {t} s"
