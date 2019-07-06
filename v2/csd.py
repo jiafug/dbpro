@@ -692,6 +692,9 @@ def write_to_csv(line_segments):
 
 
 def write_representative_trajectory(test_lg, seg_id):
+    print("seg_id: {}".format(seg_id))
+    print("FILLER: {}".format(FILLER))
+    print("len(test_lg): {}".format(len(test_lg)))
     test_lg.index = range(seg_id * FILLER, seg_id * FILLER + len(test_lg))
     test_lg.to_csv('representative_trajectories.csv',
                    header=False,
