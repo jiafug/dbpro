@@ -12,7 +12,6 @@ import gps_utils as gps
 import gc
 
 # input variables
-DATA_PATH = "test_lts.csv"
 MIN_LENGTH = 75
 EPSILON = 0.0005
 MIN_LNS = 3
@@ -38,7 +37,11 @@ def csd_main(final_lts):
     start_time = current_milli_time()
 
     # import line segments
-    line_segments = csd_import(final_lts)
+    line_segments = final_lts[['lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2',
+            'tend2', 'distance', 'bearing', 'route']]
+
+    line_segments = line_segments.reset_index(drop=True)
+    print(line_segments)
 
     # initialize a r-tree as a index
     rtree = r_tree(line_segments)
@@ -59,7 +62,7 @@ def csd_main(final_lts):
         t=time,
         ls=len(line_segments.index),
         c=len(ls_clusters),
-        n=(line_segments.classified == "0").sum()))
+        n=(line_segments.classified == "0.0").sum()))
 
     # write LTS results to new csv
     write_to_csv(line_segments)
@@ -291,6 +294,7 @@ def neighborhood(line_segments, line, extended, rtree):
     max_x = max(lon1, lon2)
     min_y = min(lat1, lat2)
     max_y = max(lat1, lat2)
+    print("rtree.intersection calculation...")
     n_candidates_ids = list(rtree.intersection((min_x, min_y, max_x, max_y)))
     n_candidates = line_segments.iloc[n_candidates_ids, :]
 
@@ -377,7 +381,7 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
                         'tend2': xn[1][7],
                         'distance': xn[1][8],
                         'bearing': xn[1][9],
-                        'route': xn[1][10],
+                        'route': int(xn[1][10]),
                         'classified': cluster_id
                     })
                     series.name = xn[0]
@@ -396,7 +400,7 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
                         'tend2': xn[1][7],
                         'distance': xn[1][8],
                         'bearing': xn[1][9],
-                        'route': xn[1][10],
+                        'route': int(xn[1][10]),
                         'classified': cluster_id
                     })
                     series.name = xn[0]
@@ -648,6 +652,10 @@ def test(projection_lg, test_lg, new_lg):
             p_test_lg = p_test_lg.append(line[1])
         p_test_lg = p_test_lg.iloc[0:0]
 
+    if len(id_list) != new_lg.shape[0]:
+        print(id_list)
+        print(new_lg)
+
     new_lg['sub_segment'] = id_list
     return new_lg
 
@@ -666,7 +674,7 @@ def update(new_lg, line_segments):
                 new_id = new_cluster + i
                 cluster_seg.append(new_id)
                 i += 1
-
+            
             line_segments.at[ls, 'classified'] = str(cluster_seg)
 
 
@@ -691,9 +699,6 @@ def write_to_csv(line_segments):
 
 
 def write_representative_trajectory(test_lg, seg_id):
-    print("seg_id: {}".format(seg_id))
-    print("FILLER: {}".format(FILLER))
-    print("len(test_lg): {}".format(len(test_lg)))
     seg_id = int(seg_id)
     test_lg.index = range(seg_id * FILLER, seg_id * FILLER + len(test_lg))
     test_lg.to_csv('representative_trajectories.csv',
