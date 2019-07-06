@@ -59,7 +59,7 @@ def csd_main(final_lts):
         t=time,
         ls=len(line_segments.index),
         c=len(ls_clusters),
-        n=(line_segments.classified == 0).sum()))
+        n=(line_segments.classified == "0").sum()))
 
     # write LTS results to new csv
     write_to_csv(line_segments)
@@ -87,7 +87,7 @@ def csd_import(final_lts):
         if route_id == 20:
             break
         '''
-        route_id = 0
+        route_id: int = 0
         if row[0] == 0:
             route_id += 1
         # short line segment filter
