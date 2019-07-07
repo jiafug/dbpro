@@ -96,43 +96,45 @@ def main():
                     point_count += 1
                 time = 0
 
-                # create a simple trajectory dataframe
-                coords = pd.DataFrame({
-                    'lon': longitude_list,
-                    'lat': latitude_list,
-                    'time': time_list
-                })
-                coords.lon = coords.lon.astype(float)
-                coords.lat = coords.lat.astype(float)
+                if len(latitude_list) > 1:
 
-                # trajectory partition (stop point extraction)
-                stop_points, stop_points_cluster = tdbc.stop_point_extraction(
-                    coords, TIME_THRESHOLD, DISTANCE_THRESHOLD)
+                    # create a simple trajectory dataframe
+                    coords = pd.DataFrame({
+                        'lon': longitude_list,
+                        'lat': latitude_list,
+                        'time': time_list
+                    })
+                    coords.lon = coords.lon.astype(float)
+                    coords.lat = coords.lat.astype(float)
 
-                # build route DataFrame
-                new = coords.merge(stop_points, on=['lon', 'lat'], how='left')
-                new = new[new.time_y.isnull()]
-                new = new.rename(columns={
-                    "time_x": "tstart",
-                    "time_y": "tend"
-                })
-                route = stop_points_cluster.append(new)
-                route = route.sort_values(by=['tstart']).reset_index(drop=True)
+                    # trajectory partition (stop point extraction)
+                    stop_points, stop_points_cluster = tdbc.stop_point_extraction(
+                        coords, TIME_THRESHOLD, DISTANCE_THRESHOLD)
 
-                # data simplification
-                merged = data_simplification(route)
+                    # build route DataFrame
+                    new = coords.merge(stop_points, on=['lon', 'lat'], how='left')
+                    new = new[new.time_y.isnull()]
+                    new = new.rename(columns={
+                        "time_x": "tstart",
+                        "time_y": "tend"
+                    })
+                    route = stop_points_cluster.append(new)
+                    route = route.sort_values(by=['tstart']).reset_index(drop=True)
 
-                # logging
-                simple_count += merged.shape[0]
-                stop_count += route.shape[0]
+                    # data simplification
+                    merged = data_simplification(route)
 
-                # write line segments (LTS) to a new csv file
-                final_lts = write_to_df(merged, final_lts, counter)
+                    # logging
+                    simple_count += merged.shape[0]
+                    stop_count += route.shape[0]
 
-                # reset list for next trajectory
-                latitude_list = []
-                longitude_list = []
-                time_list = []
+                    # write line segments (LTS) to a new csv file
+                    final_lts = write_to_df(merged, final_lts, counter)
+
+                    # reset list for next trajectory
+                    latitude_list = []
+                    longitude_list = []
+                    time_list = []
 
             # logging
             counter += 1

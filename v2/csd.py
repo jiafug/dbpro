@@ -62,7 +62,7 @@ def csd_main(final_lts, main_logger):
         t=time,
         ls=len(line_segments.index),
         c=len(ls_clusters),
-        n=(line_segments.classified == "0.0").sum()))
+        n=(line_segments.classified == "0").sum()))
 
     # write LTS results to new csv
     write_to_csv(line_segments)
@@ -143,10 +143,10 @@ def r_tree(line_segments):
         ls_id = entry[0]
         lon1, lat1 = entry[1]['lon1'], entry[1]['lat1']
         lon2, lat2 = entry[1]['lon2'], entry[1]['lat2']
-        min_x = min(lon1, lon2) - (EPSILON / 2)
-        min_y = min(lat1, lat2) - (EPSILON / 2)
-        max_x = max(lon1, lon2) + (EPSILON / 2)
-        max_y = max(lat1, lat2) + (EPSILON / 2)
+        min_x = min(lon1, lon2) 
+        min_y = min(lat1, lat2) 
+        max_x = max(lon1, lon2) 
+        max_y = max(lat1, lat2) 
         idx.insert(ls_id, (min_x, min_y, max_x, max_y))
 
     # logging
@@ -292,9 +292,9 @@ def neighborhood(line_segments, line, extended, rtree):
     lon1, lat1 = line[1]['lon1'], line[1]['lat1']
     lon2, lat2 = line[1]['lon2'], line[1]['lat2']
     min_x = min(lon1, lon2)
-    max_x = max(lon1, lon2)
-    min_y = min(lat1, lat2)
-    max_y = max(lat1, lat2)
+    max_x = max(lon1, lon2) 
+    min_y = min(lat1, lat2) 
+    max_y = max(lat1, lat2) 
 
     n_candidates_ids = list(rtree.intersection((min_x, min_y, max_x, max_y)))
     n_candidates = line_segments.iloc[n_candidates_ids, :]
