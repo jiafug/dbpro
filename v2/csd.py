@@ -37,8 +37,10 @@ def csd_main(final_lts):
     start_time = current_milli_time()
 
     # import line segments
-    line_segments = final_lts[['lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2',
-            'tend2', 'distance', 'bearing', 'route']]
+    line_segments = final_lts[[
+        'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
+        'distance', 'bearing', 'route'
+    ]]
 
     line_segments = line_segments.reset_index(drop=True)
     print(line_segments)
@@ -143,10 +145,10 @@ def r_tree(line_segments):
         ls_id = entry[0]
         lon1, lat1 = entry[1]['lon1'], entry[1]['lat1']
         lon2, lat2 = entry[1]['lon2'], entry[1]['lat2']
-        min_x = min(lon1, lon2) - EPSILON
-        min_y = min(lat1, lat2) - EPSILON
-        max_x = max(lon1, lon2) + EPSILON
-        max_y = max(lat1, lat2) + EPSILON
+        min_x = min(lon1, lon2) - (EPSILON / 2)
+        min_y = min(lat1, lat2) - (EPSILON / 2)
+        max_x = max(lon1, lon2) + (EPSILON / 2)
+        max_y = max(lat1, lat2) + (EPSILON / 2)
         idx.insert(ls_id, (min_x, min_y, max_x, max_y))
 
     # logging
@@ -294,7 +296,7 @@ def neighborhood(line_segments, line, extended, rtree):
     max_x = max(lon1, lon2)
     min_y = min(lat1, lat2)
     max_y = max(lat1, lat2)
-    print("rtree.intersection calculation...")
+
     n_candidates_ids = list(rtree.intersection((min_x, min_y, max_x, max_y)))
     n_candidates = line_segments.iloc[n_candidates_ids, :]
 
@@ -349,6 +351,8 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
         'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
         'distance', 'bearing', 'route', 'classified'
     ])
+    print("segment_id: {id} / queue_size: {s}".format(id=cluster_id,
+                                                      s=queue.shape[0]))
     while queue.shape[0] != 0:
         neighbors = pd.DataFrame(columns=[
             'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2',
@@ -534,9 +538,11 @@ def line_projection(a, b, c, new_lg):
 
     return projection_lg, projection_points
 
+
 def regression_line(a, b, c, x):
     y = c + a * x
     return y
+
 
 def projection_points(projection_points_list, a, b, c):
 
@@ -581,7 +587,7 @@ def projection_points(projection_points_list, a, b, c):
     else:
         test_list += 2 * [last_point[0]]
         final_projection_points.append(last_point)
-    
+
     # debug
     if len(final_projection_points) == 1:
         results = []
@@ -592,7 +598,6 @@ def projection_points(projection_points_list, a, b, c):
             new_list += 2 * [x]
         final_projection_points = results
         test_list = new_list
-        
 
     return final_projection_points, test_list
 
@@ -601,9 +606,6 @@ def form_sts(final_projection_points, test_list):
     test_lg = pd.DataFrame(columns=[
         'lon1', 'lat1', 'lon2', 'lat2', 'min_x1', 'max_x1', 'min_x2', 'max_x2'
     ])
-
-
-
 
     lon1 = None
     counter = 0
@@ -649,10 +651,10 @@ def test(projection_lg, test_lg, new_lg):
         # linenvergleich beginnt
         for line in test_lg.iterrows():
             # jede line in test_lg eigenschaften
-            min_x1 = round(line[1][4], 6) 
-            max_x1 = round(line[1][5], 6) 
-            min_x2 = round(line[1][6], 6) 
-            max_x2 = round(line[1][7], 6) 
+            min_x1 = round(line[1][4], 6)
+            max_x1 = round(line[1][5], 6)
+            min_x2 = round(line[1][6], 6)
+            max_x2 = round(line[1][7], 6)
             print("e_lon1 >= min_x1 and e_lon1 < max_x2 and e_lon2 <= max_x2")
             print(e_lon1, min_x1, e_lon1, max_x2, e_lon2, max_x2)
             print(e_lon1 >= min_x1 and e_lon1 < max_x2 and e_lon2 <= max_x2)
@@ -661,12 +663,17 @@ def test(projection_lg, test_lg, new_lg):
                 break
             elif p_test_lg.shape[0]:
                 for test in p_test_lg.iterrows():
-                    print("e_lon1 >= test[1]['min_x1'] and e_lon1 < max_x2 and e_lon2 <= max_x2 and e_lon1 < test[1]['max_x2']")
-                    print(e_lon1, test[1]['min_x1'], e_lon1, max_x2, e_lon2, max_x2, e_lon1, test[1]['max_x2'])
-                    print(e_lon1 >= test[1]['min_x1'],  e_lon1 < max_x2,  e_lon2 <= max_x2, e_lon1 < test[1]['max_x2'])
-                    if e_lon1 >= round(test[1][
-                            'min_x1'], 6) and e_lon1 < max_x2 and e_lon2 <= max_x2 and e_lon1 < test[
-                                1]['max_x2']:
+                    print(
+                        "e_lon1 >= test[1]['min_x1'] and e_lon1 < max_x2 and e_lon2 <= max_x2 and e_lon1 < test[1]['max_x2']"
+                    )
+                    print(e_lon1, test[1]['min_x1'], e_lon1, max_x2, e_lon2,
+                          max_x2, e_lon1, test[1]['max_x2'])
+                    print(e_lon1 >= test[1]['min_x1'], e_lon1 < max_x2,
+                          e_lon2 <= max_x2, e_lon1 < test[1]['max_x2'])
+                    if e_lon1 >= round(
+                            test[1]['min_x1'], 6
+                    ) and e_lon1 < max_x2 and e_lon2 <= max_x2 and e_lon1 < test[
+                            1]['max_x2']:
                         id_list.append([test[0], line[0]])
                         loop_break = True
                         break
@@ -700,7 +707,7 @@ def update(new_lg, line_segments):
                 new_id = new_cluster + i
                 cluster_seg.append(new_id)
                 i += 1
-            
+
             line_segments.at[ls, 'classified'] = str(cluster_seg)
 
 
