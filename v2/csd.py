@@ -447,7 +447,7 @@ def check_for_90(new_lg, line_segments):
         point1 = line[1]['lon1'],line[1]['lat1']
         point2 = line[1]['lon2'],line[1]['lat2']
         # logger.info("BLABLA DOAPKODAL: {}".format(round(gps.bearingCalculator(point1, point2))))
-        if round(gps.bearingCalculator(point1, point2)) == 90 or round(gps.bearingCalculator(point1, point2)) == 270:
+        if round(gps.bearingCalculator(point1, point2)) == 90:
             new_list = line[1]['segments']
             point1 = point1[0] + bias, point1[1]
             for j in new_list:
