@@ -14,7 +14,7 @@ import gc
 # input variables
 MIN_LENGTH = 75
 EPSILON = 0.0005
-MIN_LNS = 1
+MIN_LNS = 2
 FILLER = 10000
 
 # logging
@@ -353,10 +353,13 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
     logger.debug("segment_id: {id} / queue_size: {s}".format(id=cluster_id,
                                                              s=queue.shape[0]))
     i = 0
-    limit = queue.shape[0] * 10
+    limit = queue.shape[0] * 20
     while queue.shape[0] != 0 and i <= limit:
         
         i += 1
+        logger.debug("Total Queue Size: {}". format(i))
+        if (i == limit-1):
+            logger.info("expand_cluster limit reached")
 
         neighbors = pd.DataFrame(columns=[
             'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2',
@@ -432,6 +435,7 @@ def more_segments(clusters, line_segments):
             final_projection_points, test_list = projection_points(
                 projection_points_list, a, b, c)
             test_lg = form_sts(final_projection_points, test_list)
+            # logger.info(test_lg)
             new_lg = test(projection_lg, test_lg, new_lg)
             line_segments['classified'] = line_segments['classified'].apply(
                 lambda x: str(x))
@@ -447,7 +451,8 @@ def check_for_90(new_lg, line_segments):
         point1 = line[1]['lon1'],line[1]['lat1']
         point2 = line[1]['lon2'],line[1]['lat2']
         # logger.info("BLABLA DOAPKODAL: {}".format(round(gps.bearingCalculator(point1, point2))))
-        if round(gps.bearingCalculator(point1, point2)) == 90:
+        if round(gps.bearingCalculator(point1, point2)) == 90 or round(gps.bearingCalculator(point1, point2)) == 270:
+            logger.info("KKDLNADKLDAKLJDKLADKLJMAKLDJ__________________________________")
             new_list = line[1]['segments']
             point1 = point1[0] + bias, point1[1]
             for j in new_list:
@@ -489,8 +494,7 @@ def consecutive_lines_connecting(entry):
             },
             index=[0])
         new_lg = new_lg.append(df)
-
-        return new_lg
+    return new_lg
 
 
 def represent_line(new_lg):

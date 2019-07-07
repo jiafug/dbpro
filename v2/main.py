@@ -19,9 +19,9 @@ EPSILON = 0.00025
 
 # logging
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
+ch.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%H:%M:%S')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
