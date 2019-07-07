@@ -12,16 +12,16 @@ import csd
 import gc
 
 # input variables
-DATA_PATH = "C:\\Users\\markb\\Documents\\DBPRO\\raw_data\\test.csv"
+DATA_PATH = "../test.csv"
 TIME_THRESHOLD = 500
 DISTANCE_THRESHOLD = 60
 EPSILON = 0.00025
 
 # logging
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
+ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%H:%M:%S')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
@@ -46,7 +46,6 @@ def main():
 
     # logging
     start_time = current_milli_time()
-    
 
     with open(DATA_PATH) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
@@ -56,10 +55,9 @@ def main():
         time = 0
 
         final_lts = pd.DataFrame(columns=[
-                    'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
-                    'distance', 'bearing'
-                ])
-        
+            'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2',
+            'tend2', 'distance', 'bearing', 'route'
+        ])
 
         # logging
         past_time = current_milli_time()
@@ -72,10 +70,6 @@ def main():
                                      " -1 ").replace("[[",
                                                      "").replace("]]", "")
             missing_data = row[7]
-
-            # test break
-            #if trajectory_count == 10:
-            #    break
 
             # ignore header
             if cleared != "POLYLINE" and missing_data == "False" and row[
@@ -90,6 +84,7 @@ def main():
                         "current trajectories processed: {c} \n processed last 50 lines in {t} s"
                         .format(c=counter, t=time))
                     past_time = current_milli_time()
+                    # break
 
                 # extract all the points of a trajectory
                 for entry in splitted:
@@ -132,7 +127,7 @@ def main():
                 stop_count += route.shape[0]
 
                 # write line segments (LTS) to a new csv file
-                final_lts = write_to_df(merged, final_lts)
+                final_lts = write_to_df(merged, final_lts, counter)
 
                 # reset list for next trajectory
                 latitude_list = []
@@ -149,7 +144,8 @@ def main():
     gc.collect()
 
     #csd
-    csd.csd_main(final_lts)
+    logger.debug(final_lts)
+    csd.csd_main(final_lts, logger)
 
 
 def data_simplification(route):
@@ -198,7 +194,7 @@ def data_simplification(route):
     return merged
 
 
-def write_to_df(merged, final_lts):
+def write_to_df(merged, final_lts, counter):
     """
     Write LTS to a new csv file.
 
@@ -233,7 +229,8 @@ def write_to_df(merged, final_lts):
                 'tstart2': [point['tstart']],
                 'tend2': [point['tend']],
                 'distance': [dis],
-                'bearing': [brng]
+                'bearing': [brng],
+                'route': [counter]
             })
             lts = lts.append(lts_frame)
             # print(p_point, point)
@@ -253,7 +250,6 @@ def write_to_df(merged, final_lts):
     '''
     final_lts = final_lts.append(lts)
     return final_lts
-
 
 
 def statistics():
