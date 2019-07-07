@@ -352,7 +352,11 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
     ])
     logger.debug("segment_id: {id} / queue_size: {s}".format(id=cluster_id,
                                                              s=queue.shape[0]))
-    while queue.shape[0] != 0:
+    i = 0
+    limit = 2
+    while queue.shape[0] != 0 and i < limit:
+        
+
         neighbors = pd.DataFrame(columns=[
             'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2',
             'tend2', 'distance', 'bearing', 'route', 'classified'
@@ -417,18 +421,23 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
 def more_segments(clusters, line_segments):
     for entry in clusters:
         new_lg = consecutive_lines_connecting(entry)
-        a, b, c = represent_line(new_lg)
-        projection_lg, projection_points_list = line_projection(
-            a, b, c, new_lg)
-        final_projection_points, test_list = projection_points(
-            projection_points_list, a, b, c)
-        test_lg = form_sts(final_projection_points, test_list)
-        new_lg = test(projection_lg, test_lg, new_lg)
-        line_segments['classified'] = line_segments['classified'].apply(
-            lambda x: str(x))
-        update(new_lg, line_segments)
-        seg_id = new_lg.iloc[0]['classified']
-        write_representative_trajectory(test_lg, seg_id)
+        point1 = new_lg.iloc[0]['lon1'],new_lg.iloc[0]['lat1']
+        point2 = new_lg.iloc[0]['lon2'],new_lg.iloc[0]['lat2']
+        if len(new_lg) == 1 and round(gps.bearingCalculator(point1, point2)) == 90:
+            logger.info("90 Grad---------------------------------------------")
+        else:
+            a, b, c = represent_line(new_lg)
+            projection_lg, projection_points_list = line_projection(
+                a, b, c, new_lg)
+            final_projection_points, test_list = projection_points(
+                projection_points_list, a, b, c)
+            test_lg = form_sts(final_projection_points, test_list)
+            new_lg = test(projection_lg, test_lg, new_lg)
+            line_segments['classified'] = line_segments['classified'].apply(
+                lambda x: str(x))
+            update(new_lg, line_segments)
+            seg_id = new_lg.iloc[0]['classified']
+            write_representative_trajectory(test_lg, seg_id)
 
 
 def consecutive_lines_connecting(entry):
@@ -465,7 +474,7 @@ def consecutive_lines_connecting(entry):
             index=[0])
         new_lg = new_lg.append(df)
 
-    return new_lg
+        return new_lg
 
 
 def represent_line(new_lg):
