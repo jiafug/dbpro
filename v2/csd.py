@@ -14,7 +14,7 @@ import gc
 # input variables
 MIN_LENGTH = 75
 EPSILON = 0.0005
-MIN_LNS = 2
+MIN_LNS = 1
 FILLER = 10000
 
 # logging
@@ -353,9 +353,10 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
     logger.debug("segment_id: {id} / queue_size: {s}".format(id=cluster_id,
                                                              s=queue.shape[0]))
     i = 0
-    limit = 2
-    while queue.shape[0] != 0 and i < limit:
+    limit = queue.shape[0] * 10
+    while queue.shape[0] != 0 and i <= limit:
         
+        i += 1
 
         neighbors = pd.DataFrame(columns=[
             'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2',
@@ -421,11 +422,10 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
 def more_segments(clusters, line_segments):
     for entry in clusters:
         new_lg = consecutive_lines_connecting(entry)
-        point1 = new_lg.iloc[0]['lon1'],new_lg.iloc[0]['lat1']
-        point2 = new_lg.iloc[0]['lon2'],new_lg.iloc[0]['lat2']
-        if len(new_lg) == 1 and round(gps.bearingCalculator(point1, point2)) == 90 or new_lg.iloc[0]['distance'] == 0:
-            logger.info("90 Grad---------------------------------------------")
+        if new_lg.iloc[0]['distance'] == 0:
+            logger.info("distance == 0 ---------------------------------------------")
         else:
+            new_lg, line_segments = check_for_90(new_lg, line_segments)
             a, b, c = represent_line(new_lg)
             projection_lg, projection_points_list = line_projection(
                 a, b, c, new_lg)
@@ -438,6 +438,22 @@ def more_segments(clusters, line_segments):
             update(new_lg, line_segments)
             seg_id = new_lg.iloc[0]['classified']
             write_representative_trajectory(test_lg, seg_id)
+
+
+def check_for_90(new_lg, line_segments):
+
+    for line in new_lg.iterrows():
+        bias = 0.000001
+        point1 = line[1]['lon1'],line[1]['lat1']
+        point2 = line[1]['lon2'],line[1]['lat2']
+        # logger.info("BLABLA DOAPKODAL: {}".format(round(gps.bearingCalculator(point1, point2))))
+        if round(gps.bearingCalculator(point1, point2)) == 90:
+            new_list = line[1]['segments']
+            point1 = point1[0] + bias, point1[1]
+            for j in new_list:
+                line_segments.at[j ,'lon1'] = point1[0]
+                new_lg.at[line[0],'lon1'] = point1[0]
+    return new_lg, line_segments
 
 
 def consecutive_lines_connecting(entry):
@@ -682,6 +698,7 @@ def test(projection_lg, test_lg, new_lg):
         p_test_lg = p_test_lg.iloc[0:0]
 
     if len(id_list) != new_lg.shape[0]:
+        id_list.append([0])
         logger.debug(projection_lg)
         logger.debug(test_lg)
         logger.debug(id_list)
