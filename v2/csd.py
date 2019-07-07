@@ -18,17 +18,16 @@ MIN_LNS = 2
 FILLER = 10000
 
 # logging
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%H:%M:%S')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
+logger = None
 current_milli_time = lambda: int(round(ttt.time() * 1000))
 
 
-def csd_main(final_lts):
+def csd_main(final_lts, main_logger):
+
+    # logging
+    global logger
+    logger = main_logger
+
     # numpy settings
     np.seterr(invalid='ignore', divide='ignore')
 
@@ -43,7 +42,6 @@ def csd_main(final_lts):
     ]]
 
     line_segments = line_segments.reset_index(drop=True)
-    print(line_segments)
 
     # initialize a r-tree as a index
     rtree = r_tree(line_segments)
@@ -223,7 +221,8 @@ def line_segment_clustering(line_segments, rtree):
             neighbor_count = neighbors.shape[0]
 
             # debugging
-            print("neighbors: {n} / {c}".format(n=neighbor_count, c=counter))
+            logger.debug("neighbors: {n} / {c}".format(n=neighbor_count,
+                                                       c=counter))
 
             if neighbor_count >= MIN_LNS:
                 # Assign clusterId to ∀X ∈ Nε(L)
@@ -235,7 +234,7 @@ def line_segment_clustering(line_segments, rtree):
                 # Step 2
                 neighbors = neighbors.append(
                     expand_cluster(line_segments, queue, cluster_id, rtree))
-                logger.debug(neighbors)
+                # logger.debug(neighbors)
                 for index in neighbors.index.values.tolist():
                     line_segments.set_value(index, 'classified', cluster_id)
                 neighbors.drop_duplicates(keep='first', inplace=True)
@@ -351,8 +350,8 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
         'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
         'distance', 'bearing', 'route', 'classified'
     ])
-    print("segment_id: {id} / queue_size: {s}".format(id=cluster_id,
-                                                      s=queue.shape[0]))
+    logger.debug("segment_id: {id} / queue_size: {s}".format(id=cluster_id,
+                                                             s=queue.shape[0]))
     while queue.shape[0] != 0:
         neighbors = pd.DataFrame(columns=[
             'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2',
@@ -655,21 +654,11 @@ def test(projection_lg, test_lg, new_lg):
             max_x1 = round(line[1][5], 6)
             min_x2 = round(line[1][6], 6)
             max_x2 = round(line[1][7], 6)
-            print("e_lon1 >= min_x1 and e_lon1 < max_x2 and e_lon2 <= max_x2")
-            print(e_lon1, min_x1, e_lon1, max_x2, e_lon2, max_x2)
-            print(e_lon1 >= min_x1 and e_lon1 < max_x2 and e_lon2 <= max_x2)
             if e_lon1 >= min_x1 and e_lon1 < max_x2 and e_lon2 <= max_x2:
                 id_list.append([line[0]])
                 break
             elif p_test_lg.shape[0]:
                 for test in p_test_lg.iterrows():
-                    print(
-                        "e_lon1 >= test[1]['min_x1'] and e_lon1 < max_x2 and e_lon2 <= max_x2 and e_lon1 < test[1]['max_x2']"
-                    )
-                    print(e_lon1, test[1]['min_x1'], e_lon1, max_x2, e_lon2,
-                          max_x2, e_lon1, test[1]['max_x2'])
-                    print(e_lon1 >= test[1]['min_x1'], e_lon1 < max_x2,
-                          e_lon2 <= max_x2, e_lon1 < test[1]['max_x2'])
                     if e_lon1 >= round(
                             test[1]['min_x1'], 6
                     ) and e_lon1 < max_x2 and e_lon2 <= max_x2 and e_lon1 < test[
@@ -684,10 +673,10 @@ def test(projection_lg, test_lg, new_lg):
         p_test_lg = p_test_lg.iloc[0:0]
 
     if len(id_list) != new_lg.shape[0]:
-        print(projection_lg)
-        print(test_lg)
-        print(id_list)
-        print(new_lg)
+        logger.debug(projection_lg)
+        logger.debug(test_lg)
+        logger.debug(id_list)
+        logger.debug(new_lg)
 
     new_lg['sub_segment'] = id_list
     return new_lg
