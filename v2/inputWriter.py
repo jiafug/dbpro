@@ -34,22 +34,29 @@ with open('C:\\Users\\markb\\Documents\\GitHub\\dbpro2\\v2\\test_seg.csv', 'r') 
                 pass
             else:
                 #print('for row')
-                #print(row)
+                print(row)
                 if int(float(row[11])) != route_id:
                     result +=  '-2\n'
                     route_id += 1
                 #print(row[11])
                 #print(row[12])
-                cluster = list(row[12])
+                buffer = ''
+                cluster = list(row[12] + '+')
                 for i in cluster:
                     print(i)
                     try:
                         i = int(float(i))
                     except:
                         print('no number')
+                        if buffer != '':
+                            print(buffer)
+                            result =  result + buffer + ' -1 '
+                            if i == ',':
+                                buffer = ''
                     else:
                         if isinstance(i, int):
-                            result =  result + str(i) + ' -1 '
+                            if i >= 0:
+                                buffer += str(i)
                     
                 #df = {'lon1': float(row[1]), 'lat1': float(row[2]), 'tstart1': float(row[3]), 'tend1': row[4], 'lon2': float(row[5]), 'lat2': float(row[6]), 'tstart2': float(row[7]), 'tend2': row[8], 'distance': row[9], 'bearing': row[10], 'route': row[11], 'classified': row[12]}
                 #print(str(df))
