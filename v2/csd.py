@@ -298,7 +298,7 @@ def neighborhood(line_segments, line, extended, rtree):
 
     n_candidates_ids = list(rtree.intersection((min_x, min_y, max_x, max_y)))
     n_candidates = line_segments.iloc[n_candidates_ids, :]
-
+    logger.debug("n_candidates: {}".format(len(n_candidates)))
     for entry in n_candidates.iterrows():
         is_classified = entry[1]['classified']
 
