@@ -423,7 +423,7 @@ def more_segments(clusters, line_segments):
         new_lg = consecutive_lines_connecting(entry)
         point1 = new_lg.iloc[0]['lon1'],new_lg.iloc[0]['lat1']
         point2 = new_lg.iloc[0]['lon2'],new_lg.iloc[0]['lat2']
-        if len(new_lg) == 1 and round(gps.bearingCalculator(point1, point2)) == 90 or ew_lg.iloc[0]['distance'] == 0:
+        if len(new_lg) == 1 and round(gps.bearingCalculator(point1, point2)) == 90 or new_lg.iloc[0]['distance'] == 0:
             logger.info("90 Grad---------------------------------------------")
         else:
             a, b, c = represent_line(new_lg)
