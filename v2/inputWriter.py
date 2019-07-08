@@ -33,13 +33,12 @@ with open('C:\\Users\\markb\\Documents\\GitHub\\dbpro2\\v2\\test_seg.csv', 'r') 
                 print('header passed')
                 pass
             else:
-                #print('for row')
-                #print(row)
+                if (int(float(row[0])) % 1000) == 0:
+                    sec = current_milli_time() - start_time
+                    print('Line: ' + row[0] + '   ' + str(sec) + ' milliseconds passed')
                 if int(float(row[11])) != route_id:
                     result +=  '-2\n'
                     route_id += 1
-                #print(row[11])
-                #print(row[12])
                 isFloat = 0
                 buffer = ''
                 cluster = list(row[12] + '+')
