@@ -27,21 +27,21 @@ with open('/Users/jiafug/Desktop/DBPRO/Codev2/results.txt') as results:
         x_list = []
         y_list = []
         
-        if len(final) >= 3:
-            for i in final:
-                save = data.loc[int(i)]
-                lon1 = save['lon1']
-                lat1 = save['lat1']
-                lon2 = save['lon2']
-                lat2 = save['lat2']
+        for i in final:
+            save = data.loc[int(i)]
+            lon1 = save['lon1']
+            lat1 = save['lat1']
+            lon2 = save['lon2']
+            lat2 = save['lat2']
                 
-                x_list += [lon1, lon2]
-                y_list += [lat1, lat2]
+            x_list += [lon1, lon2]
+            y_list += [lat1, lat2]
                 
             #print(x_list)
             #print(y_list)
-            plt.plot(x_list,y_list)
-            plt.plot(x_list,y_list, 'ro')
+        line_size = math.log(sup)
+        plt.plot(x_list,y_list, linewidth=line_size)
+        plt.plot(x_list,y_list, 'ro',  markersize=1.5)
         # break
                                    
     plt.savefig('foo.png')
