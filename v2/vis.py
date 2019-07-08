@@ -43,14 +43,18 @@ with open('results.txt') as results:
         
         line_size = math.log(sup)
         color = ""
-        if sup >= 700:
+        if sup >= 700
             color = "red"
-        elif sup >= 480:
+        if sup < 700:
             color = "orange"
-        elif sup < 480:
-            color = "yellow"
-        plt.plot(x_list,y_list, linewidth=1.5, color=color)
-        plt.plot(x_list,y_list, 'ro',  markersize=1.5)
+        elif sup < 500:
+            color = "lime"
+        elif sup < 400:
+            color = "green"
+        elif sup < 300:
+            color = "blue"
+        plt.plot(x_list,y_list, linewidth=2, color=color)
+        # plt.plot(x_list,y_list, 'ro',  markersize=1.5)
         # break
                                    
     plt.savefig('foo.png')
