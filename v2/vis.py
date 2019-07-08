@@ -40,8 +40,16 @@ with open('results.txt') as results:
                 
             #print(x_list)
             #print(y_list)
+        
         line_size = math.log(sup)
-        plt.plot(x_list,y_list, linewidth=line_size)
+        color = ""
+        if sup >= 700:
+            color = "red"
+        elif sup >= 480:
+            color = "orange"
+        elif sup < 480:
+            color = "yellow"
+        plt.plot(x_list,y_list, linewidth=1.5, color=color)
         plt.plot(x_list,y_list, 'ro',  markersize=1.5)
         # break
                                    
