@@ -1,11 +1,12 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import mplleaflet
+import math
 
 fig =plt.figure()
 
-with open('/Users/jiafug/Desktop/DBPRO/Codev2/results.txt') as results:
-    data=pd.read_csv("/Users/jiafug/Desktop/DBPRO/Codev2/representative_trajectories.csv",
+with open('results.txt') as results:
+    data=pd.read_csv("representative_trajectories.csv",
                      sep=";",
                      index_col=0,
                      header=None, 
