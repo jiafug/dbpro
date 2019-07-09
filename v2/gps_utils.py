@@ -8,11 +8,13 @@ def haversine(coord1, coord2):
     """
     Calculate the Haversine distance in meters.
 
+    The function determines the distance between two points on a sphere given
+    their longitudes and latitudes.
+
     Parameters
     ----------
     coord1 : tuple of (float, float)
         Tuple (longitude, latitude)
-        
     coord2 : tuple of (float, float)
         Tuple (longitude, latitude)
 
@@ -20,16 +22,20 @@ def haversine(coord1, coord2):
     -------
     d : float
         The Haversine distance in meters.
-
     """
     lon1, lat1 = coord1
     lon2, lat2 = coord2
-    radius = 6371000  # mean earth radius in meters (GRS 80-Ellipsoid)
+
+    # mean earth radius in meters (GRS 80-Ellipsoid)
+    radius = 6371000
+
+    # haversine formula
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
     a = math.sin(dlat / 2) * math.sin(dlat / 2) + math.cos(math.radians(lat1)) \
         * math.cos(math.radians(lat2)) * math.sin(dlon / 2) * math.sin(dlon / 2)
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
     d = radius * c
     return d
 
@@ -37,31 +43,29 @@ def haversine(coord1, coord2):
 def centroid(lonT, latT):
     """
     Calculate the centroid of a cluster of points.
-
+    
     The input has to be two lists, one containing longitude values
-    and the other latitude values. 
+    and the other latitude values in their right order.
 
     Parameters
     ----------
     lonT : list of float
         List of longitude values.
-        
     latT : list of float
         List of latitude values.
 
     Returns
     -------
     (Lon, Lat) : tuple of (float, float)
-        Tuple of one longitude and latitude value.
-
+        Tuple of one longitude and latitude value (the centroid).
     """
-
+    # exceptional case
     if len(lonT) == 0 or len(latT) == 0:
         return 0, 0
 
-    xList = []
-    yList = []
-    zList = []
+    x_list = []
+    y_list = []
+    z_list = []
 
     dataT = pd.DataFrame({'lat': latT, 'lon': lonT})
     for index, row in dataT.iterrows():
@@ -70,11 +74,11 @@ def centroid(lonT, latT):
         X = math.cos(lat) * math.cos(lon)
         Y = math.cos(lat) * math.sin(lon)
         Z = math.sin(lat)
-        xList.append(X)
-        yList.append(Y)
-        zList.append(Z)
+        x_list.append(X)
+        y_list.append(Y)
+        z_list.append(Z)
 
-    dataXYZ = pd.DataFrame({'x': xList, 'y': yList, 'z': zList})
+    dataXYZ = pd.DataFrame({'x': x_list, 'y': y_list, 'z': z_list})
 
     x = 0
     y = 0
@@ -87,10 +91,6 @@ def centroid(lonT, latT):
         z += row['z']
         n += 1
 
-    aX = x / n
-    aY = y / n
-    aZ = z / n
-
     Lon = math.atan2(y, x) * 180 / math.pi
     Hyp = math.sqrt(x * x + y * y)
     Lat = math.atan2(z, Hyp) * 180 / math.pi
@@ -101,27 +101,31 @@ def centroid(lonT, latT):
 def bearingCalculator(point1, point2):
     """
     Calculate the bearing of two points.
-    
+
+    Bearing is the horizontal angle between the direction of one point and another
+    point.
+
     Parameters
     ----------
     point1 : tuple of (float, float)
         Tuple (latitude, longitude)
-        
     point2 : tuple of (float, float)
         Tuple (latitude, longitude)
-        
+
     Returns
     -------
     bearing : float
         Bearing as degree.
-
     """
     lat1, lon1 = point1
     lat2, lon2 = point2
+
     dLon = (lon2 - lon1)
+
     y = math.sin(dLon) * math.cos(lat2)
     x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(
         lat2) * math.cos(dLon)
+
     brng = math.degrees(math.atan2(y, x))
+
     return 360 - (brng + 360) % 360
-    # return math.asin(784.90/704.64)    # len (point1, point2) / len(point2, (lat1, lon2))

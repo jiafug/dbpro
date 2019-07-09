@@ -1,7 +1,6 @@
 import warnings
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
-import logging
-import csv
 import pandas as pd
 import time as ttt
 import csd_utils
@@ -14,7 +13,7 @@ import gc
 # input variables
 MIN_LENGTH = 75
 EPSILON = 0.0005
-MIN_LNS = 2
+MIN_LNS = 1
 FILLER = 10000
 
 # logging
@@ -23,7 +22,19 @@ current_milli_time = lambda: int(round(ttt.time() * 1000))
 
 
 def csd_main(final_lts, main_logger):
+    """
+    Starting point to generate STS from LTS.
 
+    A STS is a Common Segment Temporal Sequence, where R is described by
+    common segments additionally to LTS.
+
+    Parameters
+    ----------
+    final_lts : DataFrame
+        DataFrame containing all LTS.
+    main_logger : logging.Logger
+        Main Logger instance for logging purposes.
+    """
     # logging
     global logger
     logger = main_logger
@@ -35,22 +46,26 @@ def csd_main(final_lts, main_logger):
     logger.info("common segment discovery started...")
     start_time = current_milli_time()
 
-    # import line segments
-    line_segments = final_lts[[
+    # import LTS
+    lts_lines = final_lts[[
         'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
         'distance', 'bearing', 'route'
     ]]
 
-    line_segments = line_segments.reset_index(drop=True)
+    # assign each LTS an id
+    lts_lines = lts_lines.reset_index(drop=True)
 
-    # initialize a r-tree as a index
-    rtree = r_tree(line_segments)
+    # garbage collector
+    gc.collect()
+
+    # initialize a rtree as an index structure
+    rtree = r_tree(lts_lines)
 
     # find all clusters
-    ls_clusters = line_segment_clustering(line_segments, rtree)
+    line_groups = group_lines(lts_lines, rtree)
 
-    # ...
-    more_segments(ls_clusters, line_segments)
+    # generate STS for each LTS group
+    calculate_segments(line_groups, lts_lines)
 
     # logging statistics
     time = (current_milli_time() - start_time) / 1000
@@ -60,78 +75,30 @@ def csd_main(final_lts, main_logger):
  total common segment clusters: {c} 
  total line segments that were marked as noise: {n}'''.format(
         t=time,
-        ls=len(line_segments.index),
-        c=len(ls_clusters),
-        n=(line_segments.classified == "0").sum()))
+        ls=len(lts_lines.index),
+        c=len(line_groups),
+        n=(lts_lines.classified == "0").sum()))
 
-    # write LTS results to new csv
-    write_to_csv(line_segments)
-
-
-def csd_import(final_lts):
-    """
-    Import LTS and saves them in a DataFrame.
-
-    Import line segments (LTS) form the file: 'test_lts.csv' and saves them in a 
-    DataFrame if the distance criteria of minnum 25m is meet.
-    If the length of a line segment (LTS) is shorter than 25m it will be ignored.
-    """
-    line_segments = pd.DataFrame(columns=[
-        'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
-        'distance', 'bearing', 'route'
-    ])
-
-    logger.info("lts.csv import started...")
-    start_time = current_milli_time()
-
-    for row in final_lts.iterrows():
-        '''
-        # test break
-        if route_id == 20:
-            break
-        '''
-        route_id: int = 0
-        if row[0] == 0:
-            route_id += 1
-        # short line segment filter
-        if row[1]['distance'] >= MIN_LENGTH:
-            df = {
-                'lon1': row[1]['lon1'],
-                'lat1': row[1]['lat1'],
-                'tstart1': row[1]['tstart1'],
-                'tend1': row[1]['tend1'],
-                'lon2': row[1]['lon2'],
-                'lat2': row[1]['lat2'],
-                'tstart2': row[1]['tstart2'],
-                'tend2': row[1]['tend2'],
-                'distance': row[1]['distance'],
-                'bearing': row[1]['bearing'],
-                'route': route_id
-            }
-            line_segments = line_segments.append(df, ignore_index=True)
-    time = (current_milli_time() - start_time) / 1000
-    logger.info("lts.csv was imported in {} s".format(time))
-
-    # garbage collection
-    gc.collect()
-
-    return line_segments
+    # write STS results to new csv
+    write_to_csv(lts_lines)
 
 
-def r_tree(line_segments):
+def r_tree(lines):
     """
     Generate a R-Tree as a index structure for spatial searching.
 
+    A rectangle bounding box is created for each LTS line and its id
+    is stored in a rtree.
+
     Parameters
     ----------
-    line_segments : DataFrame
-        DataFrame with all line segments (LTS).
+    lines : DataFrame
+        DataFrame with all liness (LTS).
 
     Returns
     -------
     idx : rtree.Index
         R-Tree as a a index structure.
-    
     """
     # logging
     logger.info("rtree index build started...")
@@ -139,14 +106,14 @@ def r_tree(line_segments):
 
     idx = index.Index()
 
-    for entry in line_segments.iterrows():
-        ls_id = entry[0]
-        lon1, lat1 = entry[1]['lon1'], entry[1]['lat1']
-        lon2, lat2 = entry[1]['lon2'], entry[1]['lat2']
-        min_x = min(lon1, lon2) 
-        min_y = min(lat1, lat2) 
-        max_x = max(lon1, lon2) 
-        max_y = max(lat1, lat2) 
+    for lts in lines.iterrows():
+        ls_id = lts[0]
+        lon1, lat1 = lts[1]['lon1'], lts[1]['lat1']
+        lon2, lat2 = lts[1]['lon2'], lts[1]['lat2']
+        min_x = min(lon1, lon2)
+        min_y = min(lat1, lat2)
+        max_x = max(lon1, lon2)
+        max_y = max(lat1, lat2)
         idx.insert(ls_id, (min_x, min_y, max_x, max_y))
 
     # logging
@@ -156,32 +123,34 @@ def r_tree(line_segments):
     return idx
 
 
-def line_segment_clustering(line_segments, rtree):
+def group_lines(lines, rtree):
     """
-    Cluster all line segments (LTS).
-
+    Cluster all lines (LTS) which belong together in a LG.
+    
     Step one of TRACLUS line segment clustering algorithm.
-
+    Three different distance functions are used to determine whether a line
+    is a neighbor of another line.
+    A LG, line group is a cluster of LTS which belong together,
+    LG={L, L1,. . . ,Ln}.
+    
     Note
     ----
-    The following classified attributes a line segment (LTS) may have:
+    The following classified attributes a line (LTS) may have:
     -1 := unclassified
     0 := noise
-    >0 := line segment cluster id
+    >0 := line group id
 
     Parameters
     ----------
-    line_segments : DataFrame
-        DataFrame with all line segments (LTS).
-        
+    lines : DataFrame
+        DataFrame with all lines (LTS).
     rtree : rtree.Index
         R-Tree as a a index structure.
-        
+
     Returns
     -------
-    clusters : list of DataFrame
-        List of DataFrame for each line segment cluster which contains all related lines.
-    
+    line_groups : list of DataFrame
+        List of DataFrame for each line group which contains all related lines.
     """
     # logging
     past_time = current_milli_time()
@@ -189,8 +158,8 @@ def line_segment_clustering(line_segments, rtree):
     counter = 0
 
     # Set clusterId to be 0; /* an initial id */
-    cluster_id = 1
-    line_segments['classified'] = -1
+    group_id = 1
+    lines['classified'] = -1
     neighbors = pd.DataFrame(columns=[
         'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
         'distance', 'bearing', 'route', 'classified'
@@ -199,9 +168,9 @@ def line_segment_clustering(line_segments, rtree):
         'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
         'distance', 'bearing', 'route', 'classified'
     ])
-    clusters = []
+    line_groups = []
 
-    for entry in line_segments.iterrows():
+    for lts in lines.iterrows():
 
         # logging
         if counter != 0 and counter == 1 or counter == 5 or counter == 20 or counter == 100 or counter % 500 == 0:
@@ -211,13 +180,13 @@ def line_segment_clustering(line_segments, rtree):
                 .format(c=counter, t=time))
             past_time = current_milli_time()
 
-        entry = (entry[0], line_segments.loc[[entry[0]]].iloc[0])
-        is_classified = entry[1]['classified']
+        lts = (lts[0], lines.loc[[lts[0]]].iloc[0])
+        is_classified = lts[1]['classified']
         if is_classified == -1:
             # Compute Nε(L)
-            neighbors = neighbors.append(entry[1])
-            neighbors = neighbors.append(
-                neighborhood(line_segments, entry, False, rtree))
+            neighbors = neighbors.append(lts[1])
+            neighbors = neighbors.append(neighborhood(lines, lts, False,
+                                                      rtree))
             neighbor_count = neighbors.shape[0]
 
             # debugging
@@ -226,24 +195,24 @@ def line_segment_clustering(line_segments, rtree):
 
             if neighbor_count >= MIN_LNS:
                 # Assign clusterId to ∀X ∈ Nε(L)
-                neighbors['classified'] = cluster_id
+                neighbors['classified'] = group_id
                 # line_segments.set_value(entry[0], 'classified' , cluster_id)
-                line_segments.at[entry[0], 'classified'] = cluster_id
+                lines.at[lts[0], 'classified'] = group_id
                 # Insert Nε(L) − {L} into the queue Q
                 queue = queue.append(neighbors.tail(neighbor_count - 1))
                 # Step 2
                 neighbors = neighbors.append(
-                    expand_cluster(line_segments, queue, cluster_id, rtree))
+                    expand_cluster(lines, queue, group_id, rtree))
                 # logger.debug(neighbors)
-                for index in neighbors.index.values.tolist():
-                    line_segments.set_value(index, 'classified', cluster_id)
+                for neighbor_index in neighbors.index.values.tolist():
+                    lines.set_value(neighbor_index, 'classified', group_id)
                 neighbors.drop_duplicates(keep='first', inplace=True)
-                clusters.append(neighbors)
+                line_groups.append(neighbors)
                 # Increase clusterId by 1; a new id
-                cluster_id += 1
+                group_id += 1
             else:
                 # Mark L as noise
-                line_segments.at[entry[0], 'classified'] = 0
+                lines.at[lts[0], 'classified'] = 0
 
         neighbors = neighbors.iloc[0:0]
         queue = queue.iloc[0:0]
@@ -251,39 +220,37 @@ def line_segment_clustering(line_segments, rtree):
         # logging
         counter += 1
 
-    return clusters
+    return line_groups
 
 
-def neighborhood(line_segments, line, extended, rtree):
+def neighborhood(lines, line, extended, rtree):
     """
-    Compute the neighborhood (Nε(L)) of a line segment (LTS).
+    Compute the neighborhood (Nε(L)) of a line (LTS).
+
+    In the first step, all possible neighbors are retrieved, where the rtree
+    bounding boxes of original line are intersecting with other lines.
+    In the second step, the distance between the possible neighbors and the
+    original line is calculated to determine weather a line is a real neighbor
+    and therefor can be put in the same line group.
 
     Parameters
     ----------
-    line_segments : DataFrame
-        DataFrame with all line segments (LTS).
-        
+    lines : DataFrame
+        DataFrame with all lines (LTS).
     line : tuple of (int, pandas.Series)
-        Tuple with int as line segments (LTS) index id and pandas.Series with line data.
-        
+        Tuple with int as line (LTS) index id and pandas.Series with line data.
     extended : bool
-        True if it is an initial neighborhood search 
+        True if it is an initial neighborhood search.
         False if it is an expanded neighborhood search.
-        
     rtree : rtree.Index
-        R-Tree as a a index structure.
+        R-Tree as a an index structure.
 
     Returns
     -------
     neighbors : DataFrame
         DataFrame with all neighbor line segments (LTS).
-    
     """
     neighbors = pd.DataFrame(columns=[
-        'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
-        'distance', 'bearing', 'route', 'classified'
-    ])
-    n_candidates = pd.DataFrame(columns=[
         'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
         'distance', 'bearing', 'route', 'classified'
     ])
@@ -292,12 +259,12 @@ def neighborhood(line_segments, line, extended, rtree):
     lon1, lat1 = line[1]['lon1'], line[1]['lat1']
     lon2, lat2 = line[1]['lon2'], line[1]['lat2']
     min_x = min(lon1, lon2)
-    max_x = max(lon1, lon2) 
-    min_y = min(lat1, lat2) 
-    max_y = max(lat1, lat2) 
+    max_x = max(lon1, lon2)
+    min_y = min(lat1, lat2)
+    max_y = max(lat1, lat2)
 
     n_candidates_ids = list(rtree.intersection((min_x, min_y, max_x, max_y)))
-    n_candidates = line_segments.iloc[n_candidates_ids, :]
+    n_candidates = lines.iloc[n_candidates_ids, :]
     logger.debug("n_candidates: {}".format(len(n_candidates)))
     for entry in n_candidates.iterrows():
         is_classified = entry[1]['classified']
@@ -320,45 +287,42 @@ def neighborhood(line_segments, line, extended, rtree):
     return neighbors
 
 
-def expand_cluster(line_segments, queue, cluster_id, rtree):
+def expand_cluster(lines, queue, group_id, rtree):
     """
     Find and expand neighborhood for each line segment (LTS) in queue.
-
-    Step 2: compute a density-connected set.
+    
+    Step two of TRACLUS line segment clustering algorithm: compute a
+    density-connected set.
 
     Parameters
     ----------
-    line_segments : DataFrame
-        DataFrame with all line segments (LTS).
-        
+    lines : DataFrame
+        DataFrame with all lines (LTS).
     queue : DataFrame
         DataFrame which contains the neighbors of a line segment (LTS).
-        
-    cluster_id : int
-        Integer which represents the ID of the segment cluster.
-        
+    group_id : int
+        Integer which represents the ID of the line group.
     rtree : rtree.Index
         R-Tree as a a index structure.
 
     Returns
     -------
-    clusters : list of DataFrame
-        List of DataFrame; every DataFrame contains all segment lines of each segment cluster. 
-    
+    line_group : DataFrame
+        DataFrame which contains all new lines of a line group.
     """
-    cluster = pd.DataFrame(columns=[
+    line_group = pd.DataFrame(columns=[
         'lon1', 'lat1', 'tstart1', 'tend1', 'lon2', 'lat2', 'tstart2', 'tend2',
         'distance', 'bearing', 'route', 'classified'
     ])
-    logger.debug("segment_id: {id} / queue_size: {s}".format(id=cluster_id,
+    logger.debug("segment_id: {id} / queue_size: {s}".format(id=group_id,
                                                              s=queue.shape[0]))
     i = 0
     limit = queue.shape[0] * 20
     while queue.shape[0] != 0 and i <= limit:
-        
+
         i += 1
-        logger.debug("Total Queue Size: {}". format(i))
-        if (i == limit-1):
+        logger.debug("Total Queue Size: {}".format(i))
+        if i == limit - 1:
             logger.info("expand_cluster limit reached")
 
         neighbors = pd.DataFrame(columns=[
@@ -370,8 +334,7 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
             m = entry
             break
         # Compute Nε(M);
-        neighbors = neighbors.append(
-            neighborhood(line_segments, m, True, rtree))
+        neighbors = neighbors.append(neighborhood(lines, m, True, rtree))
         neighbor_count = neighbors.shape[0] + 1
         # if (|Nε(M)| ≥ MinLns) then
         if neighbor_count >= MIN_LNS:
@@ -380,7 +343,7 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
                 if xn[1]['classified'] == -1 or xn[1]['classified'] == 0:
                     # line_segments.set_value(xn[0], 'classified', cluster_id)
                     # Assign clusterId to X
-                    line_segments.at[xn[0], 'classified'] = cluster_id
+                    lines.at[xn[0], 'classified'] = group_id
                     series = pd.Series({
                         'lon1': float(xn[1][0]),
                         'lat1': float(xn[1][1]),
@@ -393,10 +356,10 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
                         'distance': xn[1][8],
                         'bearing': xn[1][9],
                         'route': int(xn[1][10]),
-                        'classified': cluster_id
+                        'classified': group_id
                     })
                     series.name = xn[0]
-                    cluster = cluster.append(series)
+                    line_group = line_group.append(series)
                 # if (X is unclassified) then
                 if xn[1]['classified'] == -1:
                     # Insert X into the queue Q
@@ -412,75 +375,138 @@ def expand_cluster(line_segments, queue, cluster_id, rtree):
                         'distance': xn[1][8],
                         'bearing': xn[1][9],
                         'route': int(xn[1][10]),
-                        'classified': cluster_id
+                        'classified': group_id
                     })
                     series.name = xn[0]
                     queue = queue.append(series)
         # Remove M from the queue Q
         queue = queue.iloc[1:]
 
-    return cluster
+    return line_group
 
 
-def more_segments(clusters, line_segments):
-    for entry in clusters:
-        new_lg = consecutive_lines_connecting(entry)
-        if new_lg.iloc[0]['distance'] == 0:
-            logger.info("distance == 0 ---------------------------------------------")
+def calculate_segments(line_groups, lines):
+    """
+    Generate common segments from grouped lines.
+
+    Parameters
+    ----------
+    line_groups : List of DataFrame
+        List which contains all line groups as DataFrame.
+    lines : DataFrame
+        DataFrame with all lines (LTS).
+    """
+    for line in line_groups:
+        # connect consecutive Lines in LG
+        connected_line = connect_consecutive_lines(line)
+        # Lines with a lengh of 0 will be ignored
+        if connected_line.iloc[0]['distance'] == 0:
+            logger.info("distance == 0")
         else:
-            new_lg, line_segments = check_for_90(new_lg, line_segments)
-            a, b, c = represent_line(new_lg)
-            projection_lg, projection_points_list = line_projection(
-                a, b, c, new_lg)
-            final_projection_points, test_list = projection_points(
+            # exceptional case for representative line generation
+            connected_line, lines = check_for_90(connected_line, lines)
+            # representative line generation
+            a, b, c = calculate_representative_line(connected_line)
+            # calculate line projection points
+            projection_lg, projection_points_list = calculate_line_projection(
+                a, b, c, connected_line)
+            # merge line projection points if a distance criteria is meet
+            final_projection_points, pp_boundaries = calculate_projection_points(
                 projection_points_list, a, b, c)
-            test_lg = form_sts(final_projection_points, test_list)
-            # logger.info(test_lg)
-            new_lg = test(projection_lg, test_lg, new_lg)
-            line_segments['classified'] = line_segments['classified'].apply(
-                lambda x: str(x))
-            update(new_lg, line_segments)
-            seg_id = new_lg.iloc[0]['classified']
-            write_representative_trajectory(test_lg, seg_id)
+            # get final representative lines / line segments
+            seg_lines = form_representative_seg(final_projection_points,
+                                                pp_boundaries)
+            # assign final representative lines / line segments to lines
+            connected_line = assign_seg_to_line(projection_lg, seg_lines,
+                                                connected_line)
+            # update lines DataFrame with segment id
+            lines['classified'] = lines['classified'].apply(lambda x: str(x))
+            update(connected_line, lines)
+            seg_id = connected_line.iloc[0]['classified']
+            # write the result to a csv file
+            write_representative_trajectory(seg_lines, seg_id)
 
 
-def check_for_90(new_lg, line_segments):
+def check_for_90(connected_line, lines):
+    """
+    Check if lines of a line group has a bearing of 90 or 270 degree.
 
-    for line in new_lg.iterrows():
-        bias = 0.000001
-        point1 = line[1]['lon1'],line[1]['lat1']
-        point2 = line[1]['lon2'],line[1]['lat2']
-        # logger.info("BLABLA DOAPKODAL: {}".format(round(gps.bearingCalculator(point1, point2))))
-        if round(gps.bearingCalculator(point1, point2)) == 90 or round(gps.bearingCalculator(point1, point2)) == 270:
-            logger.info("KKDLNADKLDAKLJDKLADKLJMAKLDJ__________________________________")
+    If line has a an angle between L and the horizontal axis (bearing) of 90 degree or 270
+    degree, a insignificant deviation is added to longitude value of the start point.
+    This is necessary to calculate a representative line as f(x) function in a later step.
+
+    Parameters
+    ----------
+    connected_line :  DataFrame
+        New DataFrame of a line group.
+    lines : DataFrame
+        DataFrame with all lines (LTS).
+
+    Returns
+    -------
+    connected_line : DataFrame
+        DataFrame which contains all new lines of a line group.
+    lines : DataFrame
+        DataFrame which contains all lines of a line group.
+    """
+    for line in connected_line.iterrows():
+        deviation = 0.000001
+        point1 = line[1]['lon1'], line[1]['lat1']
+        point2 = line[1]['lon2'], line[1]['lat2']
+
+        if round(gps.bearingCalculator(point1, point2)) == 90 or round(
+                gps.bearingCalculator(point1, point2)) == 270:
+
+            logger.info("check_for_90(connected_line, lines)")
+
             new_list = line[1]['segments']
-            point1 = point1[0] + bias, point1[1]
+            point1 = point1[0] + deviation, point1[1]
+
             for j in new_list:
-                line_segments.at[j ,'lon1'] = point1[0]
-                new_lg.at[line[0],'lon1'] = point1[0]
-    return new_lg, line_segments
+                # update lon1 value
+                lines.at[j, 'lon1'] = point1[0]
+                connected_line.at[line[0], 'lon1'] = point1[0]
+
+    return connected_line, lines
 
 
-def consecutive_lines_connecting(entry):
+def connect_consecutive_lines(line_group):
+    """
+    Check if a line group contains lines from the same Route and connect them.
 
-    new_lg = pd.DataFrame(columns=[
+    Lines that belong to the same LTS in LG, are merged into one line,
+    LG={L, ..., L_m, ..., L_i}.
+
+    Parameters
+    ----------
+    line_group : DataFrame
+        DataFrame which contains LTS of one LG.
+
+    Returns
+    -------
+    connected_line : DataFrame
+        DataFrame which contains lines of a line group.
+    """
+    connected_line = pd.DataFrame(columns=[
         'lon1', 'lat1', 'lon2', 'lat2', 'distance', 'route', 'segments',
         'classified'
     ])
 
     # list of all routes in a segment cluster (LTS)
-    distinct_routes = entry.route.unique().tolist()
+    distinct_routes = line_group.route.unique().tolist()
 
     for i in distinct_routes:
-        route = entry.loc[entry['route'] == i]
+        # get all LTS from the same LG
+        route = line_group.loc[line_group['route'] == i]
         route = route.sort_values(by=['tstart1'])
         first_line = route.iloc[0]
         last_line = route.iloc[-1]
+        # calculate the Haversine distance
         dis = gps.haversine((first_line[0], first_line[1]),
                             (last_line[4], last_line[5]))
-
+        # get all LTS ids
         line_ids = route.index.values
-        # line_ids = np.array2string(line_ids)
+        # create a new combined LTS
         df = pd.DataFrame(
             {
                 'lon1': first_line[0],
@@ -493,24 +519,46 @@ def consecutive_lines_connecting(entry):
                 'classified': first_line['classified']
             },
             index=[0])
-        new_lg = new_lg.append(df)
-    return new_lg
+        connected_line = connected_line.append(df)
+
+    return connected_line
 
 
-def represent_line(new_lg):
+def calculate_representative_line(line_group):
+    """
+    Calculate representative line of a line group
 
-    lon1_list = new_lg['lon1'].values.tolist()
-    lon2_list = new_lg['lon2'].values.tolist()
+    Ordinary least squares linear regression is used to calculate
+    the representative line in the form of function coefficients:
+    Ax + By + C = 0
+
+    Parameters
+    ----------
+    line_group : DataFrame
+        DataFrame which contains LTS of one LG.
+
+    Returns
+    -------
+    a : float
+        x regression coefficient
+    b : float
+        y
+    c : float
+        y Intercept
+    """
+    lon1_list = line_group['lon1'].values.tolist()
+    lon2_list = line_group['lon2'].values.tolist()
     lon1_list.extend(lon2_list)
     x_list = np.array(lon1_list).reshape(-1, 1)
-    lat1_list = new_lg['lat1'].values.tolist()
-    lat2_list = new_lg['lat2'].values.tolist()
+    lat1_list = line_group['lat1'].values.tolist()
+    lat2_list = line_group['lat2'].values.tolist()
     lat1_list.extend(lat2_list)
     y_list = np.array(lat1_list).reshape(-1, 1)
 
-    linear_regressor = LinearRegression()  # create object for the class
-    linear_regressor.fit(x_list, y_list)  # perform linear regression
-    Y_pred = linear_regressor.predict(x_list)  # make predictions
+    # create object for the class
+    linear_regressor = LinearRegression()
+    # perform linear regression
+    linear_regressor.fit(x_list, y_list)
 
     a = linear_regressor.coef_[0][0]
     b = -1
@@ -519,12 +567,32 @@ def represent_line(new_lg):
     return a, b, c
 
 
-def line_projection(a, b, c, new_lg):
+def calculate_line_projection(a, b, c, line_group):
+    """
+    Calculate the projection points on the representative line.
+
+    Parameters
+    ----------
+    a : float
+        x regression coefficient
+    b : float
+        y
+    c : float
+        y Intercept
+    line_group : DataFrame
+        DataFrame which contains LTS of one LG.
+
+    Returns
+    -------
+    projection_df, projection_points : tuple of (DataFrame, list)
+        DataFrame and list contain all ordered projection points.
+    """
     lon_l = []
     lat_l = []
-    projection_lg = pd.DataFrame(
+    projection_df = pd.DataFrame(
         columns=['lon1', 'lat1', 'lon2', 'lat2', 'route', 'segments'])
-    for i in new_lg.iterrows():
+
+    for i in line_group.iterrows():
         p1_lon = i[1][0]
         p1_lat = i[1][1]
         x1 = (b * b * p1_lon - a * b * p1_lat - a * c) / (a * a + b * b)
@@ -535,11 +603,13 @@ def line_projection(a, b, c, new_lg):
         y2 = (a * a * p2_lat - a * b * p2_lon - b * c) / (a * a + b * b)
         save_x1 = x1
         save_y1 = y1
+        # order them from left to right
         if x1 > x2:
             x1 = x2
             y1 = y2
             x2 = save_x1
             y2 = save_y1
+
         df = pd.DataFrame(
             {
                 'lon1': x1,
@@ -554,45 +624,86 @@ def line_projection(a, b, c, new_lg):
         lat_l.append(y1)
         lon_l.append(x2)
         lat_l.append(y2)
-        projection_lg = projection_lg.append(df)
+        projection_df = projection_df.append(df)
 
     x_lon = np.asarray(lon_l).reshape(-1, 1)
     y_lat = np.asarray(lat_l).reshape(-1, 1)
-
     projection_points = np.concatenate((x_lon, y_lat), axis=1).tolist()
 
     projection_points.sort()
-    projection_lg = projection_lg.sort_values(by=['lon1'])
+    projection_df = projection_df.sort_values(by=['lon1'])
 
-    return projection_lg, projection_points
+    return projection_df, projection_points
 
 
-def regression_line(a, b, c, x):
+def get_regression_line(a, b, c, x):
+    """
+    Calculate the y value based on function coefficients.
+
+    Parameters
+    ----------
+    a : float
+        x regression coefficient
+    b : float
+        y
+    c : float
+        y Intercept
+    x : float
+        x variable
+
+    Returns
+    -------
+    y : float
+        y value
+    """
     y = c + a * x
     return y
 
 
-def projection_points(projection_points_list, a, b, c):
+def calculate_projection_points(projection_points_list, a, b, c):
+    """
+    Calculate the the final projection points.
 
-    # die projektionspunkte
+    Removal of redundant point.
+    If he distance between two consecutive points is less than 50m, the two
+    points will be removed and replaced by their middle point.
+
+    Parameters
+    ----------
+    projection_points_list
+    a : float
+        x regression coefficient
+    b : float
+        y
+    c : float
+        y Intercept
+
+    Returns
+    -------
+    final_projection_points : DataFrame
+        DataFrame with the final projection points.
+    pp_boundaries : list of float
+        list that contains the outer points of each projection point (only long value).
+    """
     final_projection_points = []
-    # list mit min, max lon wert eines Punktes (speziell cluster mit centroid)
-    test_list = []
+    # list with min, max lon values
+    pp_boundaries = []
     p_point = None
     merged = False
     first = True
     last_point = None
+
     for point in projection_points_list:
-        x = round(point[0], 6)
         if p_point is not None:
             distance = gps.haversine(point, p_point)
             if distance >= 50:
-                if merged == False:
-                    # auch punkte ohne in einem cluster , bekommen min und max lon der vollständigkeits halber
+                if not merged:
+                    # points which will not be merged get min and max lon for the sake of completeness
                     final_projection_points.append(p_point)
-                    test_list += 2 * [p_point[0]]
+                    pp_boundaries += 2 * [p_point[0]]
                 if merged:
-                    test_list.append(p_point_max)
+                    # set max lon of last merged point
+                    pp_boundaries.append(p_point_max)
                     first = True
                 last_point = point
                 merged = False
@@ -601,37 +712,55 @@ def projection_points(projection_points_list, a, b, c):
                 lat = [p_point[1], point[1]]
                 point = middle_p = list(gps.centroid(lon, lat))
                 p_point_max = lon[1]
+                # set first point of a merged cluster
                 if first:
-                    test_list.append(lon[0])
+                    pp_boundaries.append(lon[0])
                     first = False
                 if merged:
+                    # delete the last projection point
                     del final_projection_points[-1]
                 final_projection_points.append(middle_p)
                 merged = True
+        # set previous point
         p_point = point
-    # um es abzuschließen
+    # to consider the last point
     if merged:
-        test_list.append(p_point_max)
+        pp_boundaries.append(p_point_max)
     else:
-        test_list += 2 * [last_point[0]]
+        pp_boundaries += 2 * [last_point[0]]
         final_projection_points.append(last_point)
 
-    # debug
+    # exception handling
     if len(final_projection_points) == 1:
         results = []
         new_list = []
-        for x in test_list:
-            y = regression_line(a, b, c, x)
+        for x in pp_boundaries:
+            y = get_regression_line(a, b, c, x)
             results.append([x, y])
             new_list += 2 * [x]
         final_projection_points = results
-        test_list = new_list
+        pp_boundaries = new_list
 
-    return final_projection_points, test_list
+    return final_projection_points, pp_boundaries
 
 
-def form_sts(final_projection_points, test_list):
-    test_lg = pd.DataFrame(columns=[
+def form_representative_seg(final_projection_points, pp_boundaries):
+    """
+    Form representative segment lines.
+
+    Parameters
+    ----------
+    final_projection_points : DataFrame
+        DataFrame which contains the final projection points.
+    pp_boundaries : list of float
+        list which contains the boundaries of each projection point.
+
+    Returns
+    -------
+    seg_lines : DataFrame
+        DataFrame which represents representative line segments of a LG.
+    """
+    seg_lines = pd.DataFrame(columns=[
         'lon1', 'lat1', 'lon2', 'lat2', 'min_x1', 'max_x1', 'min_x2', 'max_x2'
     ])
 
@@ -641,80 +770,102 @@ def form_sts(final_projection_points, test_list):
     for i in final_projection_points:
         lon2 = i[0]
         lat2 = i[1]
-        if (lon1 is not None):
+        if lon1 is not None:
             df = pd.DataFrame(
                 {
                     'lon1': lon1,
                     'lat1': lat1,
                     'lon2': lon2,
                     'lat2': lat2,
-                    'min_x1': test_list[counter],
-                    'max_x1': test_list[counter + 1],
-                    'min_x2': test_list[counter + 2],
-                    'max_x2': test_list[counter + 3]
+                    'min_x1': pp_boundaries[counter],
+                    'max_x1': pp_boundaries[counter + 1],
+                    'min_x2': pp_boundaries[counter + 2],
+                    'max_x2': pp_boundaries[counter + 3]
                 },
                 index=[l_id])
-            test_lg = test_lg.append(df)
+            seg_lines = seg_lines.append(df)
             lon1 = None
             counter += 2
             l_id += 1
         lon1 = lon2
         lat1 = lat2
 
-    # representiv line segments
-    return test_lg
+    return seg_lines
 
 
-def test(projection_lg, test_lg, new_lg):
+def assign_seg_to_line(projection_lg, seg_lines, connected_line):
+    """
+    Assign each LTS of in a LG to a one or more representative line segments.
+
+    Parameters
+    ----------
+    projection_lg : DataFrame
+        DataFrame which contains a LG, described with projection points.
+    seg_lines : DataFrame
+        DataFrame which represents representative line segments of a LG.
+    connected_line : DataFrame
+        DataFrame which contains the original lines of a line group.
+
+    Returns
+    -------
+    connected_line : DataFrame
+        DataFrame which contains the original lines of a line group.
+    """
     id_list = []
-    p_test_lg = pd.DataFrame(columns=[
+    p_seg_lines = pd.DataFrame(columns=[
         'lon1', 'lat1', 'lon2', 'lat2', 'min_x1', 'max_x1', 'min_x2', 'max_x2'
     ])
     loop_break = False
     for entry in projection_lg.iterrows():
+        # lines in LG
         e_lon1 = round(entry[1][0], 6)
-        e_lat1 = round(entry[1][1], 6)
         e_lon2 = round(entry[1][2], 6)
-        e_lat2 = round(entry[1][3], 6)
-        # linenvergleich beginnt
-        for line in test_lg.iterrows():
-            # jede line in test_lg eigenschaften
+        # line comparison
+        for line in seg_lines.iterrows():
+            # lines in representative line segments
             min_x1 = round(line[1][4], 6)
-            max_x1 = round(line[1][5], 6)
-            min_x2 = round(line[1][6], 6)
             max_x2 = round(line[1][7], 6)
-            if e_lon1 >= min_x1 and e_lon1 < max_x2 and e_lon2 <= max_x2:
+            if min_x1 <= e_lon1 < max_x2 and e_lon2 <= max_x2:
                 id_list.append([line[0]])
                 break
-            elif p_test_lg.shape[0]:
-                for test in p_test_lg.iterrows():
-                    if e_lon1 >= round(
-                            test[1]['min_x1'], 6
-                    ) and e_lon1 < max_x2 and e_lon2 <= max_x2 and e_lon1 < test[
+            elif p_seg_lines.shape[0]:
+                for previous in p_seg_lines.iterrows():
+                    if round(
+                            previous[1]['min_x1'], 6
+                    ) <= e_lon1 < max_x2 and e_lon2 <= max_x2 and e_lon1 < previous[
                             1]['max_x2']:
-                        id_list.append([test[0], line[0]])
+                        id_list.append([previous[0], line[0]])
+                        # if all segments are found, search can be interrupted
                         loop_break = True
                         break
                 if loop_break:
                     loop_break = False
                     break
-            p_test_lg = p_test_lg.append(line[1])
-        p_test_lg = p_test_lg.iloc[0:0]
+            p_seg_lines = p_seg_lines.append(line[1])
+        p_seg_lines = p_seg_lines.iloc[0:0]
 
-    if len(id_list) != new_lg.shape[0]:
-        id_list.append([0])
-        logger.debug(projection_lg)
-        logger.debug(test_lg)
-        logger.debug(id_list)
-        logger.debug(new_lg)
+    # update
+    connected_line['sub_segment'] = id_list
 
-    new_lg['sub_segment'] = id_list
-    return new_lg
+    return connected_line
 
 
-def update(new_lg, line_segments):
+def update(connected_line, lines):
+    """
+    Update the classified id with the new segment id.
+
+    The classified id of each LTS is updated with their final
+    segment ids.
+
+    Parameters
+    ----------
+    connected_line : DataFrame
+        DataFrame which contains the original lines of a line group.
+    lines : DataFrame
+        DataFrame with all lines (LTS).
+    """
     # update the classified id with the new sub segments
-    for lg in new_lg.iterrows():
+    for lg in connected_line.iterrows():
         segments = lg[1]['segments']
         sub_segment = lg[1]['sub_segment']
         cluster = lg[1]['classified']
@@ -727,37 +878,42 @@ def update(new_lg, line_segments):
                 cluster_seg.append(new_id)
                 i += 1
 
-            line_segments.at[ls, 'classified'] = str(cluster_seg)
+            lines.at[ls, 'classified'] = str(cluster_seg)
 
 
-def write_to_csv(line_segments):
+def write_to_csv(lines):
     """
-    Write line segments to a new file.
-
-    The new file will contain line segments (LTS) with an additional route id and segment id.
+    Write lines to a new file.
+    
+    The new file will contain lines (LTS) with an additional route id and segment id.
 
     Parameters
     ----------
-    line_segments : DataFrame
-        DataFrame with all line segments (LTS).
-        
+    lines : DataFrame
+        DataFrame with all lines (LTS).
     """
 
-    line_segments.to_csv('test_seg.csv', header=True, sep=';',
-                         mode='w')  # header = 'False', index = 'True')
+    lines.to_csv('test_seg.csv', header=True, sep=';',
+                 mode='w')  # header = 'False', index = 'True')
 
     # logging
     logger.info("wrote results to 'test_seg.csv'")
 
 
-def write_representative_trajectory(test_lg, seg_id):
+def write_representative_trajectory(seg_lines, seg_id):
+    """
+    Write representative line segments to a new file.
+
+    Parameters
+    ----------
+    seg_lines : DataFrame
+        DataFrame which represents representative line segments of a LG.
+    seg_id : int
+        int that is the id of a line segment.
+    """
     seg_id = int(seg_id)
-    test_lg.index = range(seg_id * FILLER, seg_id * FILLER + len(test_lg))
-    test_lg.to_csv('representative_trajectories.csv',
-                   header=False,
-                   sep=';',
-                   mode='a')  # header = 'False', index = 'True')
-
-
-if __name__ == "__main__":
-    main()
+    seg_lines.index = range(seg_id * FILLER, seg_id * FILLER + len(seg_lines))
+    seg_lines.to_csv('representative_trajectories.csv',
+                     header=False,
+                     sep=';',
+                     mode='a')  # header = 'False', index = 'True')

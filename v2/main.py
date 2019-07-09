@@ -9,7 +9,6 @@ import tdbc
 import time as ttt
 from rdp import rdp
 import csd
-import gc
 
 # input variables
 DATA_PATH = "../test.csv"
@@ -31,11 +30,24 @@ point_count = 0
 stop_count = 0
 simple_count = 0
 
-# header flag for the csv writter
+# header flag for the csv writer
 header = False
 
 
 def main():
+    """
+    Start the application.
+
+    This function is the starting point.
+    The data is read in line by line (Trajectory by Trajectory).
+    A Trajectory is list of trajectory Points based on their time serials,
+    T = P_1, P_2, ..., P_n where P_1.t < P_2.t < ... < P_n.t.
+    A Point is P = {lng, lat, t}, represented by longitude, latitude, and time.
+    All Points of a Trajectory are passed in a joint data frame for further processing:
+    1) Trajectory partition: identify Stop Points, SP = {lng, lat, tstart , tend}
+    2) data simplification: simplify a partitioned Trajectory
+    3) common segment discovery: invoke csd.py for common segment discovery
+    """
     # logging
     global trajectory_count
     global point_count
@@ -64,7 +76,7 @@ def main():
         logger.info("trajectory partition and simplification started...")
         counter = 0
 
-        # read one csv line (trajectory) after another
+        # read one csv line (Trajectory) after another
         for row in csv_reader:
             cleared = row[8].replace("],[",
                                      " -1 ").replace("[[",
@@ -84,9 +96,9 @@ def main():
                         "current trajectories processed: {c} \n processed last 50 lines in {t} s"
                         .format(c=counter, t=time))
                     past_time = current_milli_time()
-                    # break
+                    break
 
-                # extract all the points of a trajectory
+                # extract all the Points of a Trajectory
                 for entry in splitted:
                     data = entry.split(",")
                     latitude_list.append(data[1])
@@ -98,7 +110,7 @@ def main():
 
                 if len(latitude_list) > 1:
 
-                    # create a simple trajectory dataframe
+                    # create a Trajectory data frame
                     coords = pd.DataFrame({
                         'lon': longitude_list,
                         'lat': latitude_list,
@@ -107,19 +119,22 @@ def main():
                     coords.lon = coords.lon.astype(float)
                     coords.lat = coords.lat.astype(float)
 
-                    # trajectory partition (stop point extraction)
+                    # Trajectory partition (Stop Point extraction)
                     stop_points, stop_points_cluster = tdbc.stop_point_extraction(
                         coords, TIME_THRESHOLD, DISTANCE_THRESHOLD)
 
-                    # build route DataFrame
-                    new = coords.merge(stop_points, on=['lon', 'lat'], how='left')
+                    # build Route data frame
+                    new = coords.merge(stop_points,
+                                       on=['lon', 'lat'],
+                                       how='left')
                     new = new[new.time_y.isnull()]
                     new = new.rename(columns={
                         "time_x": "tstart",
                         "time_y": "tend"
                     })
                     route = stop_points_cluster.append(new)
-                    route = route.sort_values(by=['tstart']).reset_index(drop=True)
+                    route = route.sort_values(by=['tstart']).reset_index(
+                        drop=True)
 
                     # data simplification
                     merged = data_simplification(route)
@@ -128,10 +143,10 @@ def main():
                     simple_count += merged.shape[0]
                     stop_count += route.shape[0]
 
-                    # write line segments (LTS) to a new csv file
+                    # write Route to a new joint data frame
                     final_lts = write_to_df(merged, final_lts, counter)
 
-                    # reset list for next trajectory
+                    # reset list for next Trajectory
                     latitude_list = []
                     longitude_list = []
                     time_list = []
@@ -141,32 +156,28 @@ def main():
 
     # logging
     statistics()
-
-    # garbage collection
-    gc.collect()
-
-    #csd
     logger.debug(final_lts)
+
+    # csd
     csd.csd_main(final_lts, logger)
 
 
 def data_simplification(route):
     """
-    Apply the Douglas-Peuker algorithm to simplify a route.
-
-    The Douglas-Peuker algorithm is not applied to an entire route,
-    but form SP to SP.
+    Apply the Douglas-Peuker algorithm to simplify a Route.
+    
+    The Douglas-Peuker algorithm is an algorithm for curve smoothing.
+    It is not applied to an entire Route but from Stop Point to Stop Point.
 
     Parameters
     ----------
     route : DataFrame
-        Dataframe containing routes of trajectories, including SP.
-        
+        Dataframe containing a Trajectory Route, including SP.
+
     Returns
     -------
     merged : DataFrame
-        Dataframe of a simplified route.
-
+        Dataframe of a simplified Route.
     """
     part = []
     simplified_coords = pd.DataFrame(columns=['lon', 'lat', 'tstart', 'tend'])
@@ -198,13 +209,28 @@ def data_simplification(route):
 
 def write_to_df(merged, final_lts, counter):
     """
-    Write LTS to a new csv file.
+    Create from Route a Line Temporal Sequence (LTS) and save it in a new data frame.
+
+    In a LTS a Route is described as a sequence of lines:
+    LTS = R = L_1, L_2, ..., L_n, where L_i = {P_j, P_k,l,θ}, P_j and P_k are the nodes of R
+    after simplification (Douglas-Peuker algorithm),l means the length of L_i (Haversine distance),
+    and θ means the angle between L_i and the horizontal axis (bearing).
+
+    Each Route is saved in a data frame in the LTS format for further processing.
 
     Parameters
     ----------
     merged : DataFrame
-        DataFrame containing all simplified routes. 
+        Dataframe containing simplified Routes of one Trajectory.
+    final_lts : Dataframe
+        Dataframe containing all LTS.
+    counter : int
+        A counter to count the number of Trajectories.
 
+    Returns
+    -------
+    final_lts : DataFrame
+        DataFrame containing all LTS.
     """
     global header
     p_point = pd.Series([])
@@ -255,9 +281,7 @@ def write_to_df(merged, final_lts, counter):
 
 
 def statistics():
-    """ 
-    Print logging information.
-    """
+    """Print logging information."""
     time = (current_milli_time() - start_time) / 1000
     compression = simple_count / point_count
     logger.info("""trajectory partition and simplification was completed

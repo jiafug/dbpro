@@ -1,4 +1,5 @@
 import warnings
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import gps_utils as gps
 import pandas as pd
@@ -8,23 +9,23 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
     """
     Calculate stop points of one trajectory.
 
+    The Time Distance Based Clustering algorithm is used to extract stop points.
+    The TDBC forms the GPS Point clusters.
+
     Parameters
     ----------
     trajectory : DataFrame
         DataFrame of one trajectory
-        
     time_threshold : int
         Time Threshold (δθ).
-        
     distance_threshold : int
         Distance Threshold (δd).
-        
+
     Returns
     -------
     stop_points, stop_points_cluster : tuple of (DataFrame, DataFrame)
-        stop_points is a DataFrame containing all points that have been merged into one stop point.
-        stop_points_cluster contains cluster of stop points.
-
+        stop_points is a DataFrame containing all Points that have been merged into one Stop Point.
+        stop_points_cluster contains cluster of Stop Points as a single Point.
     """
     # empty cluster, c_cluster := current cluster, p_cluster := previous cluster
     c_cluster = pd.DataFrame(columns=['lon', 'lat', 'time'])
@@ -32,15 +33,12 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
     stop_points = pd.DataFrame(columns=['lon', 'lat', 'time'])
     stop_points_cluster = pd.DataFrame(
         columns=['lon', 'lat', 'tstart', 'tend'])
-    # p_point is previous stop point in SP
-    p_point = None
     c_point = None
     # Boolean Flag only relevant to the check() function
     is_type2 = False
 
     def start_end(cluster):
-        """
-        Calculate the start and end time of one cluster.
+        """Calculate the start and end time of one cluster.
 
         Parameters
         ----------
@@ -49,55 +47,53 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
 
         Returns
         -------
-        min_time, max_time : tuple of (int, int)
-            min_time is the start time
-            max_time is the end time
-
+        min_t, max_t : tuple of (int, int)
+            min_t is the start time
+            max_t is the end time
         """
-        min_time = min(cluster['time'].tolist())
-        max_time = max(cluster['time'].tolist())
-        return min_time, max_time
+        min_t = min(cluster['time'].tolist())
+        max_t = max(cluster['time'].tolist())
+        return min_t, max_t
 
     def add_stop_point(cluster):
         """
-        Add a cluster of points to SP if condition is meet.
+        Add a cluster of points to SP if the condition is meet.
 
         Parameters
         ----------
         cluster : DataFrame
             DataFrame containing a Cluster C.
-
         """
         nonlocal p_cluster
         nonlocal stop_points
         nonlocal stop_points_cluster
         nonlocal c_cluster
-        p_stop_point = None
+
         min_time, max_time = start_end(cluster)
         # if there is no SP, add the cluster/point to SP as initial SP
         if len(stop_points.tail(1)['lon'].values) == 0:
             stop_points = stop_points.append(cluster, ignore_index=True)
-            spc_frame = pd.DataFrame({
+            sp_cluster_frame = pd.DataFrame({
                 "lon": [cluster['lon'][0]],
                 "lat": [cluster['lat'][0]],
                 "tstart": [cluster['time'][0]]
             })
-            stop_points_cluster = stop_points_cluster.append(spc_frame,
+            stop_points_cluster = stop_points_cluster.append(sp_cluster_frame,
                                                              ignore_index=True)
             p_cluster = cluster
         else:
-            # get the last SP
+            # get previous Stop Point in SP
             p_stop_point = stop_points_cluster.tail(
                 1)['lon'].values[0], stop_points_cluster.tail(
                     1)['lat'].values[0]
             # calculate the centroid of cluster C
-            cluster_coord = gps.centroid(cluster['lon'].tolist(),
-                                         cluster['lat'].tolist())
+            cluster_center = gps.centroid(cluster['lon'].tolist(),
+                                          cluster['lat'].tolist())
             # if (distance(Cluster, Previous stop point in SP) < δd) then
-            if gps.haversine(cluster_coord, p_stop_point) < distance_threshold:
+            if gps.haversine(cluster_center,
+                             p_stop_point) < distance_threshold:
+                # extract long and lat from previous Stop Point in SP
                 p_stop_point_lon, p_stop_point_lat = p_stop_point
-                test_point = gps.centroid([p_stop_point_lon],
-                                          [p_stop_point_lon])
                 test_point_frame = pd.DataFrame({
                     "lon": [p_stop_point_lon],
                     "lat": [p_stop_point_lat],
@@ -115,22 +111,23 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
                 ]).drop_duplicates().reset_index(drop=True)
                 # delete current cluster C
                 c_cluster = c_cluster.iloc[0:0]
+            # if not (distance(Cluster, Previous stop point in SP) < δd) then
             else:
-                centroid_lon, centroid_lat = cluster_coord
-                if centroid_lon != 0:
-                    data = {
-                        'lon': [centroid_lon],
-                        'lat': [centroid_lat],
+                center_lon, center_lat = cluster_center
+                if center_lon != 0:
+                    df = {
+                        'lon': [center_lon],
+                        'lat': [center_lat],
                         'tstart': [min_time],
                         'tend': [max_time]
                     }
-                    sp_frame = pd.DataFrame(
-                        data, columns=['lon', 'lat', 'tstart', 'tend'])
+                    sp_df = pd.DataFrame(
+                        df, columns=['lon', 'lat', 'tstart', 'tend'])
                     # put Cluster in SP
                     stop_points = stop_points.append(cluster,
                                                      ignore_index=True)
                     stop_points_cluster = stop_points_cluster.append(
-                        sp_frame, ignore_index=True)
+                        sp_df, ignore_index=True)
                     # Previous = Cluster
                     p_cluster = cluster
                     # delete current cluster C
@@ -139,7 +136,7 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
     def check():
         """
         Check whether the previous cluster and the current cluster can be merged.
-
+        
         This strategy is used so two nearby SP can be merged into one SP.
         """
         nonlocal c_cluster
@@ -159,7 +156,7 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
             # if Previous is one of type II then SP.add(Previous)
             if is_type2:
                 add_stop_point(p_cluster)
-                is_type2 == False
+                is_type2 = False
             # else Previous = Cluster
             else:
                 p_cluster = c_cluster
@@ -176,7 +173,6 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
         p_cluster: time = [30, 45, 60]
         c_cluster: time = [75, 90, 105]
         time interval = 105 - 30 = 75
-
         """
         nonlocal c_cluster
         nonlocal p_cluster
@@ -184,33 +180,35 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
         if p_cluster.shape[0] == 0:
             return 0
 
-        min_time = min([
+        min_t = min([
             c_cluster.iloc[[0]]['time'].tolist()[0],
             p_cluster.iloc[[0]]['time'].tolist()[0]
         ])
-        max_time = max([
+        max_t = max([
             c_cluster.iloc[[-1]]['time'].tolist()[0],
             p_cluster.iloc[[-1]]['time'].tolist()[0]
         ])
-        return abs(max_time - min_time)
+
+        return abs(max_t - min_t)
 
     def duration():
-        """ 
-        Calculate the duration of the current cluster.s
+        """
+        Calculate the duration of the current cluster.
 
         Notes
         ----------
         The time duration is e.g.:
         c_cluster: time = [75, 90, 105]
-        duration = 105 - 75 = 30 s
-
+        duration = 105 - 75 = 30
         """
         nonlocal c_cluster
-        min_time = min(c_cluster['time'].tolist())
-        max_time = max(c_cluster['time'].tolist())
-        return max_time - min_time
 
-    # initialize variables
+        min_t = min(c_cluster['time'].tolist())
+        max_t = max(c_cluster['time'].tolist())
+
+        return max_t - min_t
+
+    # TDBC start here: initialize variables
     p_coord = None
     skip = False
     # if the first is type I then SP.add(the point)
@@ -235,7 +233,7 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
 
         cluster_coord = gps.centroid(c_cluster['lon'].tolist(),
                                      c_cluster['lat'].tolist())
-        # add point to c_cluster if distance criteria is meet
+        # add point to c_cluster if distance criteria is meet / initial cluster
         if c_cluster.shape[0] == 0:
             if p_coord is not None and gps.haversine(
                     p_coord, point_coord) < distance_threshold:
@@ -250,6 +248,7 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
                 cluster_coord = gps.centroid(c_cluster['lon'].tolist(),
                                              c_cluster['lat'].tolist())
             else:
+                # skip is used so there is previous point / cluster
                 skip = True
 
         else:
@@ -259,7 +258,8 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
                 cluster_coord = gps.centroid(c_cluster['lon'].tolist(),
                                              c_cluster['lat'].tolist())
                 is_type2 = True
-        if skip != True:
+        if not skip:
+            # type II Stop Point
             if c_cluster.shape[0] != 0 and gps.haversine(
                     cluster_coord, point_coord
             ) > distance_threshold and duration() > time_threshold:
@@ -270,11 +270,12 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
             ) > distance_threshold and duration() < time_threshold:
                 check()
                 is_type2 = True
+            # type III Stop Point, currently not used
             if p_coord is not None and gps.haversine(
                     p_coord,
                     point_coord) < distance_threshold and 15 > time_threshold:
                 is_type2 = False
-            if p_coord != None and gps.haversine(
+            if p_coord is not None and gps.haversine(
                     p_coord,
                     point_coord) > distance_threshold and 15 > time_threshold:
                 is_type2 = False
@@ -283,7 +284,7 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
         # p_coord is set
         p_coord = point['lon'], point['lat']
 
-    # add the last point or cluster to SP
+    # add the last point or cluster to SP as a type I Stop Point
     if c_cluster.shape[0] == 0:
         p_frame = {
             'lon': c_point['lon'],
