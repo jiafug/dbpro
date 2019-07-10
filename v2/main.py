@@ -1,3 +1,12 @@
+"""main.py is responsible for hole process of trajectory abstraction.
+
+This process includes trajectory partition, data simplification and
+common segment discovery.
+trajectory partition -> tdbc.py
+data simplification -> this file: main.py
+common segment discovery -> csd.py
+
+"""
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import logging
@@ -35,18 +44,26 @@ header = False
 
 
 def main():
-    """
-    Start the application.
+    """Start the application.
 
     This function is the starting point.
     The data is read in line by line (Trajectory by Trajectory).
+
     A Trajectory is list of trajectory Points based on their time serials,
     T = P_1, P_2, ..., P_n where P_1.t < P_2.t < ... < P_n.t.
     A Point is P = {lng, lat, t}, represented by longitude, latitude, and time.
+
     All Points of a Trajectory are passed in a joint data frame for further processing:
     1) Trajectory partition: identify Stop Points, SP = {lng, lat, tstart , tend}
     2) data simplification: simplify a partitioned Trajectory
     3) common segment discovery: invoke csd.py for common segment discovery
+
+    References
+    ----------
+    [1] Fu, Z., Tian, Z., Xu, Y. and Zhou, K. (2017). Mining Frequent Route
+        Patterns Based on Personal Trajectory Abstraction. IEEE Access, 5,
+        pp.11352-11363.
+
     """
     # logging
     global trajectory_count
@@ -163,8 +180,7 @@ def main():
 
 
 def data_simplification(route):
-    """
-    Apply the Douglas-Peuker algorithm to simplify a Route.
+    """Apply the Douglas-Peuker algorithm to simplify a Route.
     
     The Douglas-Peuker algorithm is an algorithm for curve smoothing.
     It is not applied to an entire Route but from Stop Point to Stop Point.
@@ -178,6 +194,7 @@ def data_simplification(route):
     -------
     merged : DataFrame
         Dataframe of a simplified Route.
+
     """
     part = []
     simplified_coords = pd.DataFrame(columns=['lon', 'lat', 'tstart', 'tend'])
@@ -208,8 +225,7 @@ def data_simplification(route):
 
 
 def write_to_df(merged, final_lts, counter):
-    """
-    Create from Route a Line Temporal Sequence (LTS) and save it in a new data frame.
+    """Create from Route a Line Temporal Sequence (LTS) and save it in a new data frame.
 
     In a LTS a Route is described as a sequence of lines:
     LTS = R = L_1, L_2, ..., L_n, where L_i = {P_j, P_k,l,θ}, P_j and P_k are the nodes of R
@@ -231,6 +247,7 @@ def write_to_df(merged, final_lts, counter):
     -------
     final_lts : DataFrame
         DataFrame containing all LTS.
+
     """
     global header
     p_point = pd.Series([])

@@ -5,8 +5,7 @@ import pandas as pd
 
 
 def haversine(coord1, coord2):
-    """
-    Calculate the Haversine distance in meters.
+    """Calculate the Haversine distance in meters.
 
     The function determines the distance between two points on a sphere given
     their longitudes and latitudes.
@@ -22,6 +21,7 @@ def haversine(coord1, coord2):
     -------
     d : float
         The Haversine distance in meters.
+
     """
     lon1, lat1 = coord1
     lon2, lat2 = coord2
@@ -41,8 +41,7 @@ def haversine(coord1, coord2):
 
 
 def centroid(lonT, latT):
-    """
-    Calculate the centroid of a cluster of points.
+    """Calculate the centroid of a cluster of points.
     
     The input has to be two lists, one containing longitude values
     and the other latitude values in their right order.
@@ -58,6 +57,7 @@ def centroid(lonT, latT):
     -------
     (Lon, Lat) : tuple of (float, float)
         Tuple of one longitude and latitude value (the centroid).
+
     """
     # exceptional case
     if len(lonT) == 0 or len(latT) == 0:
@@ -99,8 +99,7 @@ def centroid(lonT, latT):
 
 
 def bearingCalculator(point1, point2):
-    """
-    Calculate the bearing of two points.
+    """Calculate the bearing of two points.
 
     Bearing is the horizontal angle between the direction of one point and another
     point.
@@ -116,6 +115,7 @@ def bearingCalculator(point1, point2):
     -------
     bearing : float
         Bearing as degree.
+
     """
     lat1, lon1 = point1
     lat2, lon2 = point2

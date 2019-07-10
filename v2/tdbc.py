@@ -6,8 +6,7 @@ import pandas as pd
 
 
 def stop_point_extraction(trajectory, time_threshold, distance_threshold):
-    """
-    Calculate stop points of one trajectory.
+    """Calculate stop points of one trajectory.
 
     The Time Distance Based Clustering algorithm is used to extract stop points.
     The TDBC forms the GPS Point clusters.
@@ -26,6 +25,13 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
     stop_points, stop_points_cluster : tuple of (DataFrame, DataFrame)
         stop_points is a DataFrame containing all Points that have been merged into one Stop Point.
         stop_points_cluster contains cluster of Stop Points as a single Point.
+
+    References
+    ----------
+    [2] Fu, Zhongliang & Tian, Zongshun & Xu, Yanqing & Qiao, Changjian. (2016). A Two-Step
+        Clustering Approach to Extract Locations from Individual GPS Trajectory Data. ISPRS
+        International Journal of Geo-Information. 5. 166.
+
     """
     # empty cluster, c_cluster := current cluster, p_cluster := previous cluster
     c_cluster = pd.DataFrame(columns=['lon', 'lat', 'time'])
@@ -50,19 +56,20 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
         min_t, max_t : tuple of (int, int)
             min_t is the start time
             max_t is the end time
+
         """
         min_t = min(cluster['time'].tolist())
         max_t = max(cluster['time'].tolist())
         return min_t, max_t
 
     def add_stop_point(cluster):
-        """
-        Add a cluster of points to SP if the condition is meet.
+        """Add a cluster of points to SP if the condition is meet.
 
         Parameters
         ----------
         cluster : DataFrame
             DataFrame containing a Cluster C.
+
         """
         nonlocal p_cluster
         nonlocal stop_points
@@ -134,10 +141,10 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
                     c_cluster = c_cluster.iloc[0:0]
 
     def check():
-        """
-        Check whether the previous cluster and the current cluster can be merged.
+        """Check whether the previous cluster and the current cluster can be merged.
         
         This strategy is used so two nearby SP can be merged into one SP.
+
         """
         nonlocal c_cluster
         nonlocal p_cluster
@@ -164,15 +171,15 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
             add_stop_point(c_cluster)
 
     def time_interval():
-        """
-        Calculate the time interval of p_cluster and c_cluster.
+        """Calculate the time interval of p_cluster and c_cluster.
 
         Notes
         ----------
         The time interval is e.g.:
-        p_cluster: time = [30, 45, 60]
-        c_cluster: time = [75, 90, 105]
-        time interval = 105 - 30 = 75
+            p_cluster: time = [30, 45, 60]
+            c_cluster: time = [75, 90, 105]
+            time interval = 105 - 30 = 75
+
         """
         nonlocal c_cluster
         nonlocal p_cluster
@@ -192,14 +199,14 @@ def stop_point_extraction(trajectory, time_threshold, distance_threshold):
         return abs(max_t - min_t)
 
     def duration():
-        """
-        Calculate the duration of the current cluster.
+        """Calculate the duration of the current cluster.
 
         Notes
         ----------
         The time duration is e.g.:
-        c_cluster: time = [75, 90, 105]
-        duration = 105 - 75 = 30
+            c_cluster: time = [75, 90, 105]
+            duration = 105 - 75 = 30
+
         """
         nonlocal c_cluster
 
