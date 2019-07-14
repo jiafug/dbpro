@@ -60,7 +60,9 @@ def csd_main(final_lts, main_logger):
         'distance', 'bearing', 'route'
     ]]
 
-    # assign each LTS an id
+    print(lts_lines.to_latex())
+
+    # assign each L an id
     lts_lines = lts_lines.reset_index(drop=True)
 
     # garbage collector
@@ -132,7 +134,7 @@ def r_tree(lines):
 
 
 def group_lines(lines, rtree):
-    """Cluster all lines (LTS) which belong together in a LG.
+    """Cluster all lines which belong together in a LG.
     
     Step one of TRACLUS line segment clustering algorithm.
     Three different distance functions are used to determine whether a line
@@ -238,7 +240,7 @@ def group_lines(lines, rtree):
 
 
 def neighborhood(lines, line, extended, rtree):
-    """Compute the neighborhood (Nε(L)) of a line (LTS).
+    """Compute the neighborhood (Nε(L)) of a line.
 
     The neighborhood (Nε(L)) is defined by Nε(Li)={Lj ∈D|dist(Li,Lj)≤ε}.
     In the first step, all possible neighbors are retrieved, where the rtree
@@ -252,7 +254,7 @@ def neighborhood(lines, line, extended, rtree):
     lines : DataFrame
         DataFrame with all lines (LTS).
     line : tuple of (int, pandas.Series)
-        Tuple with int as line (LTS) index id and pandas.Series with line data.
+        Tuple with int as line index id and pandas.Series with line data.
     extended : bool
         True if it is an initial neighborhood search.
         False if it is an expanded neighborhood search.
@@ -262,7 +264,7 @@ def neighborhood(lines, line, extended, rtree):
     Returns
     -------
     neighbors : DataFrame
-        DataFrame with all neighbor line segments (LTS).
+        DataFrame with all neighbor lines.
 
     """
     neighbors = pd.DataFrame(columns=[
@@ -303,7 +305,7 @@ def neighborhood(lines, line, extended, rtree):
 
 
 def expand_cluster(lines, queue, group_id, rtree):
-    """Find and expand neighborhood for each line segment (LTS) in queue.
+    """Find and expand neighborhood for each line in queue.
     
     Step two of TRACLUS line segment clustering algorithm: compute a
     density-connected set.
@@ -313,7 +315,7 @@ def expand_cluster(lines, queue, group_id, rtree):
     lines : DataFrame
         DataFrame with all lines (LTS).
     queue : DataFrame
-        DataFrame which contains the neighbors of a line segment (LTS).
+        DataFrame which contains the neighbors of a line.
     group_id : int
         Integer which represents the ID of the line group.
     rtree : rtree.Index
@@ -500,7 +502,7 @@ def connect_consecutive_lines(line_group):
     Parameters
     ----------
     line_group : DataFrame
-        DataFrame which contains LTS of one LG.
+        DataFrame which contains lines of one LG.
 
     Returns
     -------
@@ -513,11 +515,11 @@ def connect_consecutive_lines(line_group):
         'classified'
     ])
 
-    # list of all routes in a segment cluster (LTS)
+    # list of all routes in a LG
     distinct_routes = line_group.route.unique().tolist()
 
     for i in distinct_routes:
-        # get all LTS from the same LG
+        # get all L from the same LG
         route = line_group.loc[line_group['route'] == i]
         route = route.sort_values(by=['tstart1'])
         first_line = route.iloc[0]
@@ -525,9 +527,9 @@ def connect_consecutive_lines(line_group):
         # calculate the Haversine distance
         dis = gps.haversine((first_line[0], first_line[1]),
                             (last_line[4], last_line[5]))
-        # get all LTS ids
+        # get all L ids
         line_ids = route.index.values
-        # create a new combined LTS
+        # create a new combined L
         df = pd.DataFrame(
             {
                 'lon1': first_line[0],
@@ -815,7 +817,7 @@ def form_representative_seg(final_projection_points, pp_boundaries):
 
 
 def assign_seg_to_line(projection_lg, seg_lines, connected_line):
-    """Assign each LTS of in a LG to a one or more representative line segments.
+    """Assign each L of in a LG to a one or more representative line segments.
 
     Parameters
     ----------
@@ -874,7 +876,7 @@ def assign_seg_to_line(projection_lg, seg_lines, connected_line):
 def update(connected_line, lines):
     """Update the classified id with the new segment id.
 
-    The classified id of each LTS is updated with their final
+    The classified id of each L is updated with their final
     segment ids.
 
     Parameters
