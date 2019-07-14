@@ -113,7 +113,7 @@ def main():
                         "current trajectories processed: {c} \n processed last 50 lines in {t} s"
                         .format(c=counter, t=time))
                     past_time = current_milli_time()
-                    break
+                    # break
 
                 # extract all the Points of a Trajectory
                 for entry in splitted:
